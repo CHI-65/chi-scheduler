@@ -180,22 +180,27 @@ async function access(){
 function signOut(){LS.removeItem("dbx_tok");location.reload();}
 
 /* ---------- Dropbox API ---------- */
+function argHeader(obj){
+  return JSON.stringify(obj).replace(/[\u007f-\uffff]/g,function(c){
+    return "\\u"+c.charCodeAt(0).toString(16).padStart(4,"0");
+  });
+}
 async function rpc(ep,arg){const tk=await access();
   const r=await fetch("https://api.dropboxapi.com/2/"+ep,{method:"POST",
     headers:{"Authorization":"Bearer "+tk,"Content-Type":"application/json"},
-    body:JSON.stringify(arg)});
+    body:argHeader(arg)});
   if(!r.ok)throw new Error(ep+" "+r.status+" "+await r.text());
   return r.json();}
 async function dl(path){const tk=await access();
   const r=await fetch("https://content.dropboxapi.com/2/files/download",{method:"POST",
-    headers:{"Authorization":"Bearer "+tk,"Dropbox-API-Arg":JSON.stringify({path})}});
+    headers:{"Authorization":"Bearer "+tk,"Dropbox-API-Arg":argHeader({path:path})}});
   if(r.status===409)return null;
   if(!r.ok)throw new Error("download "+r.status);
   return r.text();}
 async function up(path,text){const tk=await access();
   const r=await fetch("https://content.dropboxapi.com/2/files/upload",{method:"POST",
     headers:{"Authorization":"Bearer "+tk,"Content-Type":"application/octet-stream",
-      "Dropbox-API-Arg":JSON.stringify({path,mode:"overwrite",mute:true})},
+      "Dropbox-API-Arg":argHeader({path:path,mode:"overwrite",mute:true})},
     body:new Blob([text])});
   if(!r.ok)throw new Error("upload "+r.status);
   return r.json();}
@@ -221,14 +226,14 @@ async function scan(){
   while(res.has_more){res=await rpc("files/list_folder/continue",{cursor:res.cursor});
     ents=ents.concat(res.entries.filter(e=>e[".tag"]==="file"));}
   for(const f of ents){
-    const txt=await dl(f.path_display)||"";
+    const txt=await dl(f.id||f.path_lower||f.path_display)||"";
     const g=k=>{const m=txt.match(new RegExp("^"+k+":\\s*(.+)$","mi"));
       return m?m[1].trim():"";};
     const it={id:num(board.nextNum),n:board.nextNum,
       title:g("title")||f.name,from:g("from")||"file",when:g("when")||"",
       status:"inbox",added:new Date().toISOString()};
     board.nextNum++; board.items.push(it);
-    await mv(f.path_display,DONE+"/"+f.name);
+    await mv(f.id||f.path_lower||f.path_display,DONE+"/"+f.name);
   }
   /* archive deleted > 15 days */
   const cut=Date.now()-15*864e5;
