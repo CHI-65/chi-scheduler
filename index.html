@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="📅 Scheduler">
+<title>📅 Scheduler</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%230B0B0B'/%3E%3Ctext x='90' y='125' font-size='110' text-anchor='middle'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0B0B0B; --card:#161616; --card2:#1F1F1F;
+  --ink:#FFFFFF; --yellow:#FFD60A; --dim:#C9C9C9;
+  --green:#38D06A; --red:#FF5A5A; --line:#2E2E2E;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,"SF Pro",Helvetica,Arial,sans-serif;
+  font-size:24px; line-height:1.4;}
+body{padding:env(safe-area-inset-top) 0 0 0; min-height:100vh;}
+header{position:sticky; top:0; background:var(--bg); z-index:5;
+  padding:14px 16px 10px; border-bottom:2px solid var(--line);
+  display:flex; align-items:center; gap:12px;}
+header .mark{font-size:40px;}
+header h1{font-size:30px; margin:0; font-weight:700; flex:1;}
+main{padding:16px 16px 140px;}
+.screen{display:none;}
+.screen.on{display:block;}
+button{font-family:inherit; border:none; cursor:pointer;}
+.big{display:block; width:100%; min-height:76px; font-size:28px; font-weight:700;
+  border-radius:16px; margin:12px 0; padding:16px;}
+.b-yellow{background:var(--yellow); color:#0B0B0B;}
+.b-green{background:var(--green); color:#04340F;}
+.b-gray{background:var(--card2); color:var(--ink); border:2px solid var(--line);}
+.b-red{background:var(--red); color:#3A0000;}
+.item{background:var(--card); border:2px solid var(--line); border-radius:16px;
+  padding:18px; margin:14px 0;}
+.item .cat{color:var(--yellow); font-size:22px; font-weight:800; letter-spacing:1px;}
+.item .ttl{font-size:28px; font-weight:700; margin:6px 0;}
+.item .sub{font-size:19px; color:var(--dim);}
+.item .acts{display:none; margin-top:10px;}
+.item.open{border-color:var(--yellow);}
+.item.open .acts{display:block;}
+.rowbtns{display:flex; gap:12px;}
+.rowbtns button{flex:1; min-height:70px; font-size:26px; font-weight:800; border-radius:14px;}
+.up,.dn{background:var(--card2); color:var(--yellow); border:2px solid var(--line);
+  width:70px; min-height:70px; font-size:34px; border-radius:14px;}
+.prow{display:flex; gap:10px; align-items:stretch;}
+.prow .body{flex:1;}
+nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
+  border-top:2px solid var(--line); display:flex;
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
+nav button{flex:1; background:none; color:var(--dim); font-size:19px;
+  font-weight:700; padding:10px 2px; border-radius:12px;}
+nav button .ico{display:block; font-size:32px;}
+nav button.cur{color:var(--yellow); background:var(--card);}
+.banner{background:var(--yellow); color:#0B0B0B; font-size:24px; font-weight:800;
+  padding:16px; border-radius:14px; margin:12px 0; display:none;}
+.note{color:var(--dim); font-size:20px; margin:10px 0;}
+input[type=text],input[type=password]{width:100%; font-size:26px; padding:16px;
+  border-radius:14px; border:2px solid var(--line); background:var(--card);
+  color:var(--ink); margin:8px 0;}
+select{font-size:26px; padding:14px; border-radius:14px; background:var(--card);
+  color:var(--ink); border:2px solid var(--line); width:100%;}
+.empty{color:var(--dim); font-size:24px; text-align:center; padding:40px 10px;}
+.stamp{font-size:17px; color:var(--dim); text-align:center; margin-top:8px;}
+h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
+</style>
+</head>
+<body>
+<header><span class="mark">📅</span><h1 id="hdr">Scheduler</h1>
+<button id="rescan" class="b-gray" style="min-height:56px;min-width:56px;font-size:28px;border-radius:14px;">↻</button>
+</header>
+<main>
+<div id="alertBanner" class="banner"></div>
+
+<div id="s-setup" class="screen">
+  <p class="note">📅 One-time setup. Enter the Dropbox app key, then sign in. Nothing is typed after this.</p>
+  <input type="text" id="appKey" placeholder="Dropbox app key" autocapitalize="off" autocorrect="off">
+  <button class="big b-yellow" onclick="startAuth()">Sign in to Dropbox</button>
+  <p class="note" id="setupMsg"></p>
+</div>
+
+<div id="s-inbox" class="screen">
+  <button class="big b-yellow" onclick="showAdd()">＋ Add item</button>
+  <div id="addBox" style="display:none;">
+    <input type="text" id="addTitle" placeholder="Say the task title">
+    <div class="rowbtns">
+      <button class="b-green" onclick="addItem()">Save</button>
+      <button class="b-gray" onclick="hideAdd()">Cancel</button>
+    </div>
+  </div>
+  <div id="inboxList"></div>
+</div>
+
+<div id="s-pri" class="screen"><div id="priList"></div></div>
+
+<div id="s-done" class="screen">
+  <div id="doneList"></div>
+  <h2>Deleted (kept 15 days)</h2>
+  <div id="delList"></div>
+</div>
+
+<div id="s-set" class="screen">
+  <h2>Reminder frequency</h2>
+  <select id="freq" onchange="setFreq()">
+    <option value="0">Off</option>
+    <option value="30">Every 30 min</option>
+    <option value="60">Every hour</option>
+    <option value="180">Every 3 hours</option>
+    <option value="1440">Once a day</option>
+  </select>
+  <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
+  <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
+  <p class="stamp" id="verStamp">📅 Scheduler v1</p>
+</div>
+
+<p class="stamp" id="scanStamp"></p>
+</main>
+
+<nav>
+  <button id="n-inbox" onclick="go('inbox')"><span class="ico">📥</span>Inbox</button>
+  <button id="n-pri" onclick="go('pri')"><span class="ico">📅</span>Priorities</button>
+  <button id="n-done" onclick="go('done')"><span class="ico">✅</span>Done</button>
+  <button id="n-set" onclick="go('set')"><span class="ico">⚙️</span>Settings</button>
+</nav>
+
+<script>
+const ROOT="/Grok Central";
+const INBOX=ROOT+"/calendar-inbox";
+const DONE=ROOT+"/calendar-inbox-done";
+const ARCH=ROOT+"/calendar-archive";
+const BOARD=ROOT+"/calendar-board.json";
+let board=null, tab="inbox", remTimer=null;
+
+/* ---------- storage ---------- */
+const LS=window.localStorage;
+function tokens(){try{return JSON.parse(LS.getItem("dbx_tok")||"null");}catch(e){return null;}}
+function saveTok(t){LS.setItem("dbx_tok",JSON.stringify(t));}
+function appKey(){return LS.getItem("dbx_key")||"";}
+
+/* ---------- PKCE OAuth ---------- */
+function rnd(n){const a=new Uint8Array(n);crypto.getRandomValues(a);
+  return btoa(String.fromCharCode(...a)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");}
+async function sha(v){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));
+  return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");}
+async function startAuth(){
+  const k=document.getElementById("appKey").value.trim();
+  if(!k){msg("Enter the app key first.");return;}
+  LS.setItem("dbx_key",k);
+  const v=rnd(48); LS.setItem("pkce_v",v);
+  const c=await sha(v);
+  const r=location.origin+location.pathname;
+  location.href="https://www.dropbox.com/oauth2/authorize?client_id="+encodeURIComponent(k)
+   +"&response_type=code&code_challenge="+c+"&code_challenge_method=S256"
+   +"&token_access_type=offline&redirect_uri="+encodeURIComponent(r);
+}
+async function finishAuth(code){
+  const r=location.origin+location.pathname;
+  const body=new URLSearchParams({code,grant_type:"authorization_code",
+    client_id:appKey(),redirect_uri:r,code_verifier:LS.getItem("pkce_v")});
+  const res=await fetch("https://api.dropboxapi.com/oauth2/token",{method:"POST",body});
+  const j=await res.json();
+  if(j.access_token){j.exp=Date.now()+(j.expires_in-60)*1000; saveTok(j);
+    history.replaceState({},"",r);}
+  else msg("Sign-in failed. Try again.");
+}
+async function access(){
+  let t=tokens(); if(!t)return null;
+  if(Date.now()<t.exp)return t.access_token;
+  const body=new URLSearchParams({grant_type:"refresh_token",
+    refresh_token:t.refresh_token,client_id:appKey()});
+  const res=await fetch("https://api.dropboxapi.com/oauth2/token",{method:"POST",body});
+  const j=await res.json();
+  if(j.access_token){t.access_token=j.access_token;t.exp=Date.now()+(j.expires_in-60)*1000;
+    saveTok(t);return t.access_token;}
+  return null;
+}
+function signOut(){LS.removeItem("dbx_tok");location.reload();}
+
+/* ---------- Dropbox API ---------- */
+async function rpc(ep,arg){const tk=await access();
+  const r=await fetch("https://api.dropboxapi.com/2/"+ep,{method:"POST",
+    headers:{"Authorization":"Bearer "+tk,"Content-Type":"application/json"},
+    body:JSON.stringify(arg)});
+  if(!r.ok)throw new Error(ep+" "+r.status+" "+await r.text());
+  return r.json();}
+async function dl(path){const tk=await access();
+  const r=await fetch("https://content.dropboxapi.com/2/files/download",{method:"POST",
+    headers:{"Authorization":"Bearer "+tk,"Dropbox-API-Arg":JSON.stringify({path})}});
+  if(r.status===409)return null;
+  if(!r.ok)throw new Error("download "+r.status);
+  return r.text();}
+async function up(path,text){const tk=await access();
+  const r=await fetch("https://content.dropboxapi.com/2/files/upload",{method:"POST",
+    headers:{"Authorization":"Bearer "+tk,"Content-Type":"application/octet-stream",
+      "Dropbox-API-Arg":JSON.stringify({path,mode:"overwrite",mute:true})},
+    body:new Blob([text])});
+  if(!r.ok)throw new Error("upload "+r.status);
+  return r.json();}
+async function mv(from,to){return rpc("files/move_v2",
+  {from_path:from,to_path:to,autorename:true});}
+
+/* ---------- board ---------- */
+function freshBoard(){return{nextNum:1,items:[],reminderMins:0};}
+function num(n){return "📅-"+String(n).padStart(4,"0");}
+async function loadBoard(){const t=await dl(BOARD);
+  board=t?JSON.parse(t):freshBoard();
+  if(!board.items)board.items=[];
+  if(!board.nextNum)board.nextNum=1;}
+async function saveBoard(){await up(BOARD,JSON.stringify(board,null,1));}
+
+/* ---------- scan on open ---------- */
+async function scan(){
+  stamp("Scanning inbox…");
+  await loadBoard();
+  let res; try{res=await rpc("files/list_folder",{path:INBOX,recursive:false});}
+  catch(e){res={entries:[]};}
+  let ents=res.entries.filter(e=>e[".tag"]==="file");
+  while(res.has_more){res=await rpc("files/list_folder/continue",{cursor:res.cursor});
+    ents=ents.concat(res.entries.filter(e=>e[".tag"]==="file"));}
+  for(const f of ents){
+    const txt=await dl(f.path_display)||"";
+    const g=k=>{const m=txt.match(new RegExp("^"+k+":\\s*(.+)$","mi"));
+      return m?m[1].trim():"";};
+    const it={id:num(board.nextNum),n:board.nextNum,
+      title:g("title")||f.name,from:g("from")||"file",when:g("when")||"",
+      status:"inbox",added:new Date().toISOString()};
+    board.nextNum++; board.items.push(it);
+    await mv(f.path_display,DONE+"/"+f.name);
+  }
+  /* archive deleted > 15 days */
+  const cut=Date.now()-15*864e5;
+  for(const it of board.items.filter(i=>i.status==="deleted")){
+    if(new Date(it.deletedAt).getTime()<cut){
+      await up(ARCH+"/"+String(it.n).padStart(4,"0")+".txt",
+        it.id+"\n"+it.title+"\nfrom: "+it.from+"\ncompleted: "+(it.completedAt||"")
+        +"\ndeleted: "+it.deletedAt+"\n");
+      it.status="archived";}}
+  board.items=board.items.filter(i=>i.status!=="archived");
+  await saveBoard();
+  render();
+  stamp("Last scan "+new Date().toLocaleTimeString());
+}
+
+/* ---------- actions ---------- */
+function find(id){return board.items.find(i=>i.id===id);}
+async function act(id,what){const it=find(id); if(!it)return;
+  if(what==="A"){it.status="priority";
+    it.ord=1+Math.max(0,...board.items.filter(i=>i.status==="priority").map(i=>i.ord||0));}
+  if(what==="B"){it.status="completed";it.completedAt=new Date().toISOString();}
+  if(what==="C"){it.skipped=true;}
+  if(what==="del"){it.status="deleted";it.deletedAt=new Date().toISOString();}
+  if(what==="doneFromPri"){it.status="completed";it.completedAt=new Date().toISOString();}
+  await saveBoard(); render();}
+async function move(id,dir){const pris=board.items.filter(i=>i.status==="priority")
+    .sort((a,b)=>(a.ord||0)-(b.ord||0));
+  const i=pris.findIndex(p=>p.id===id); const j=i+dir;
+  if(j<0||j>=pris.length)return;
+  const t=pris[i].ord; pris[i].ord=pris[j].ord; pris[j].ord=t;
+  await saveBoard(); render();}
+function showAdd(){document.getElementById("addBox").style.display="block";
+  document.getElementById("addTitle").focus();}
+function hideAdd(){document.getElementById("addBox").style.display="none";}
+async function addItem(){const t=document.getElementById("addTitle").value.trim();
+  if(!t)return;
+  const d=new Date(),p=x=>String(x).padStart(2,"0");
+  const fn=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())
+    +"T"+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds())+"-app.txt";
+  await up(INBOX+"/"+fn,"title: "+t+"\nfrom: app\nwhen: "+d.toISOString()+"\n");
+  document.getElementById("addTitle").value=""; hideAdd();
+  await scan();}
+
+/* ---------- render ---------- */
+function card(it,inner){return '<div class="item" id="c'+it.n+'" onclick="tgl('+it.n+')">'
+  +'<div class="cat">'+it.id+'</div><div class="ttl">'+esc(it.title)+'</div>'
+  +'<div class="sub">from '+esc(it.from)+(it.skipped?" · skipped":"")+'</div>'
+  +'<div class="acts" onclick="event.stopPropagation()">'+inner+'</div></div>';}
+function esc(s){return String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));}
+function tgl(n){document.getElementById("c"+n).classList.toggle("open");}
+function render(){
+  const ib=board.items.filter(i=>i.status==="inbox");
+  document.getElementById("inboxList").innerHTML=ib.length?ib.map(it=>card(it,
+    '<button class="big b-yellow" onclick="act(\''+it.id+'\',\'A\')">A · Add to priorities</button>'
+   +'<button class="big b-green" onclick="act(\''+it.id+'\',\'B\')">B · Mark complete</button>'
+   +'<button class="big b-gray" onclick="act(\''+it.id+'\',\'C\')">C · Skip</button>'
+  )).join(""):'<p class="empty">Inbox empty 📅</p>';
+  const pr=board.items.filter(i=>i.status==="priority").sort((a,b)=>(a.ord||0)-(b.ord||0));
+  document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>
+   '<div class="item open"><div class="prow">'
+   +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id+'</div>'
+   +'<div class="ttl">'+esc(it.title)+'</div></div>'
+   +'<div><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button><br>'
+   +'<button class="dn" style="margin-top:8px" onclick="move(\''+it.id+'\',1)">▼</button></div>'
+   +'</div><button class="big b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">Mark complete</button></div>'
+  ).join(""):'<p class="empty">No priorities 📅</p>';
+  const dn=board.items.filter(i=>i.status==="completed");
+  document.getElementById("doneList").innerHTML=dn.length?dn.map(it=>card(it,
+   '<button class="big b-red" onclick="act(\''+it.id+'\',\'del\')">Delete</button>'
+  )).join(""):'<p class="empty">Nothing completed yet 📅</p>';
+  const dl2=board.items.filter(i=>i.status==="deleted");
+  document.getElementById("delList").innerHTML=dl2.length?dl2.map(it=>{
+    const days=Math.max(0,15-Math.floor((Date.now()-new Date(it.deletedAt))/864e5));
+    return '<div class="item"><div class="cat">'+it.id+'</div><div class="ttl">'
+      +esc(it.title)+'</div><div class="sub">archives in '+days+' days</div></div>';
+  }).join(""):'<p class="note">Empty.</p>';
+  document.getElementById("freq").value=String(board.reminderMins||0);
+  armReminder();
+}
+
+/* ---------- reminders ---------- */
+function setFreq(){board.reminderMins=Number(document.getElementById("freq").value);
+  saveBoard(); armReminder();}
+function armReminder(){if(remTimer)clearInterval(remTimer);
+  const m=board&&board.reminderMins;
+  if(!m)return;
+  remTimer=setInterval(()=>{
+    const top=board.items.filter(i=>i.status==="priority")
+      .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
+    if(!top)return;
+    const b=document.getElementById("alertBanner");
+    b.textContent="📅 PRIORITY ALERT — "+top.title+" — "+top.id;
+    b.style.display="block";
+    setTimeout(()=>b.style.display="none",30000);
+  },m*60000);}
+
+/* ---------- nav / boot ---------- */
+function go(t){tab=t;
+  for(const s of["inbox","pri","done","set"]){
+    document.getElementById("s-"+s).classList.toggle("on",s===t);
+    document.getElementById("n-"+s).classList.toggle("cur",s===t);}
+  document.getElementById("hdr").textContent=
+    {inbox:"Inbox",pri:"Priorities",done:"Completed",set:"Settings"}[t];}
+function msg(m){document.getElementById("setupMsg").textContent=m;}
+function stamp(m){document.getElementById("scanStamp").textContent=m;}
+document.getElementById("rescan").onclick=()=>scan().catch(e=>stamp("Scan failed: "+e.message));
+(async function boot(){
+  const code=new URLSearchParams(location.search).get("code");
+  if(code)await finishAuth(code);
+  if(!tokens()){document.getElementById("s-setup").classList.add("on");
+    document.querySelector("nav").style.display="none"; return;}
+  go("inbox");
+  try{await scan();}catch(e){stamp("Scan failed: "+e.message);}
+})();
+</script>
+</body>
+</html>
