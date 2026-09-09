@@ -115,7 +115,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.2</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.3</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -247,20 +247,28 @@ async function scan(){
   let ents=res.entries.filter(e=>e[".tag"]==="file");
   while(res.has_more){res=await rpc("files/list_folder/continue",{cursor:res.cursor});
     ents=ents.concat(res.entries.filter(e=>e[".tag"]==="file"));}
-  var n=0;
+  const seen={};
+  for(const it of board.items){ if(it.src) seen[it.src]=true; }
+  const fresh=[], later=[];
   for(const f of ents){
-    n++;
-    stamp("Scanning "+n+" of "+ents.length+"…");
+    if(seen[f.name]){ later.push(f); continue; }
     const txt=await dl(f.id||f.path_lower||f.path_display)||"";
     const g=k=>{const m=txt.match(new RegExp("^"+k+":\\s*(.+)$","mi"));
       return m?m[1].trim():"";};
-    await mv(f.id||f.path_lower||f.path_display,DONE+"/"+f.name);
     const it={id:num(board.nextNum),n:board.nextNum,
       title:g("title")||f.name,from:g("from")||"file",when:g("when")||"",
-      status:"inbox",added:new Date().toISOString()};
-    board.nextNum++; board.items.push(it);
-    await saveBoard();
-    await sleep(1500);
+      src:f.name,status:"inbox",added:new Date().toISOString()};
+    board.nextNum++; board.items.push(it); fresh.push(f);
+  }
+  if(fresh.length) await saveBoard();
+  render();
+  stamp(fresh.length?("Inbox ready · "+fresh.length):"Last scan "+new Date().toLocaleTimeString());
+  const fileAway=later.concat(fresh);
+  for(var i=0;i<fileAway.length;i++){
+    const f=fileAway[i];
+    try{ await mv(f.id||f.path_lower||f.path_display,DONE+"/"+f.name); }
+    catch(e){}
+    if(i+1<fileAway.length) await sleep(1500);
   }
   /* archive deleted > 15 days */
   const cut=Date.now()-15*864e5;
