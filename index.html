@@ -44,21 +44,26 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .item .cat{color:var(--yellow); font-size:22px; font-weight:800; letter-spacing:1px;}
 .item .ttl{font-size:28px; font-weight:700; margin:6px 0;}
 .item .sub{font-size:19px; color:var(--dim);}
-.item .acts{display:none; margin-top:10px;}
+.item .acts{display:none;}
 .item.open{border-color:var(--yellow);}
-.item.open .acts{display:block;}
+.item.open .acts{display:flex;}
+.itemrow{display:flex; align-items:center; gap:10px;}
+.itemrow .body{flex:1; min-width:0;}
+.itemrow .acts{flex:0 0 auto; margin:0;}
 .rowbtns{display:flex; gap:8px; justify-content:flex-start; flex-wrap:wrap;}
 .rowbtns button{flex:0 0 auto; width:fit-content; min-height:0; height:auto;
   font-size:16px; font-weight:800; border-radius:12px; padding:8px 12px;}
-.minirow{display:flex; gap:8px; justify-content:flex-start; align-items:flex-start; flex-wrap:wrap; margin-top:10px;}
+.minirow{display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:nowrap; margin:0;}
 .mini{display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
-  width:fit-content; flex:0 0 auto; height:2.8em; line-height:1.15; white-space:nowrap;
-  font-size:16px; font-weight:800; border-radius:12px; padding:0 10px; margin:0;}
+  width:fit-content; flex:0 0 auto; height:5.6em; line-height:1.15; white-space:nowrap;
+  font-size:28px; font-weight:800; border-radius:14px; padding:0 14px; margin:0;}
 .up,.dn{background:#000000; color:#FFFFFF; border:2px solid var(--yellow);
   width:fit-content; min-width:2.2em; min-height:0; height:2.2em; padding:0 8px;
   font-size:18px; border-radius:10px; line-height:1;}
-.prow{display:flex; gap:10px; align-items:stretch;}
-.prow .body{flex:1;}
+.prow{display:flex; gap:10px; align-items:center;}
+.prow .body{flex:1; min-width:0;}
+.prow .acts{flex:0 0 auto;}
+.prow .movers{display:flex; flex-direction:column; gap:6px; flex:0 0 auto;}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
   border-top:2px solid var(--line); display:flex;
   padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
@@ -124,7 +129,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.7</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.8</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -324,9 +329,10 @@ async function addItem(){const t=document.getElementById("addTitle").value.trim(
 
 /* ---------- render ---------- */
 function card(it,inner){return '<div class="item" id="c'+it.n+'" onclick="tgl('+it.n+')">'
+  +'<div class="itemrow"><div class="body">'
   +'<div class="cat">'+it.id+'</div><div class="ttl">'+esc(it.title)+'</div>'
   +'<div class="sub">from '+esc(it.from)+(it.skipped?" · skipped":"")+'</div>'
-  +'<div class="acts" onclick="event.stopPropagation()">'+inner+'</div></div>';}
+  +'</div><div class="acts" onclick="event.stopPropagation()">'+inner+'</div></div></div>';}
 function esc(s){return String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));}
 function tgl(n){document.getElementById("c"+n).classList.toggle("open");}
 function render(){
@@ -343,11 +349,12 @@ function render(){
    '<div class="item open"><div class="prow">'
    +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id+'</div>'
    +'<div class="ttl">'+esc(it.title)+'</div></div>'
-   +'<div><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button><br>'
-   +'<button class="dn" style="margin-top:8px" onclick="move(\''+it.id+'\',1)">▼</button></div>'
-   +'</div><div class="minirow">'
+   +'<div class="acts minirow">'
    +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">✅<br>Done</button>'
    +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'back\')">📥<br>Inbox</button>'
+   +'</div>'
+   +'<div class="movers"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
+   +'<button class="dn" onclick="move(\''+it.id+'\',1)">▼</button></div>'
    +'</div></div>'
   ).join(""):'<p class="empty">No priorities 📅</p>';
   const dn=board.items.filter(i=>i.status==="completed");
