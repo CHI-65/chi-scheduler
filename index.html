@@ -33,10 +33,12 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .big{display:inline-flex; width:fit-content; max-width:100%; flex:0 0 auto;
   min-height:0; height:auto; font-size:18px; font-weight:800;
   border-radius:12px; margin:10px 0; padding:8px 12px; line-height:1.2;}
-.b-yellow{background:var(--yellow); color:#0B0B0B;}
-.b-green{background:var(--green); color:#04340F;}
-.b-gray{background:var(--card2); color:var(--ink); border:2px solid var(--line);}
-.b-red{background:var(--red); color:#3A0000;}
+.b-yellow,.b-green,.b-gray,.b-red{
+  background:#000000; color:#FFFFFF; border:2px solid var(--line);}
+.b-yellow{border-color:var(--yellow);}
+.b-green{border-color:var(--green);}
+.b-gray{border-color:var(--line);}
+.b-red{border-color:var(--red);}
 .item{background:var(--card); border:2px solid var(--line); border-radius:16px;
   padding:18px; margin:14px 0;}
 .item .cat{color:var(--yellow); font-size:22px; font-weight:800; letter-spacing:1px;}
@@ -52,7 +54,7 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .mini{display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
   width:fit-content; flex:0 0 auto; height:2.8em; line-height:1.15; white-space:nowrap;
   font-size:16px; font-weight:800; border-radius:12px; padding:0 10px; margin:0;}
-.up,.dn{background:var(--card2); color:var(--yellow); border:2px solid var(--line);
+.up,.dn{background:#000000; color:#FFFFFF; border:2px solid var(--yellow);
   width:fit-content; min-width:2.2em; min-height:0; height:2.2em; padding:0 8px;
   font-size:18px; border-radius:10px; line-height:1;}
 .prow{display:flex; gap:10px; align-items:stretch;}
@@ -122,7 +124,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.6</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.7</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
