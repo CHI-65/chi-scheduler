@@ -30,8 +30,9 @@ main{padding:16px 16px 140px;}
 .screen{display:none;}
 .screen.on{display:block;}
 button{font-family:inherit; border:none; cursor:pointer;}
-.big{display:block; width:100%; min-height:76px; font-size:28px; font-weight:700;
-  border-radius:16px; margin:12px 0; padding:16px;}
+.big{display:inline-flex; width:fit-content; max-width:100%; flex:0 0 auto;
+  min-height:0; height:auto; font-size:18px; font-weight:800;
+  border-radius:12px; margin:10px 0; padding:8px 12px; line-height:1.2;}
 .b-yellow{background:var(--yellow); color:#0B0B0B;}
 .b-green{background:var(--green); color:#04340F;}
 .b-gray{background:var(--card2); color:var(--ink); border:2px solid var(--line);}
@@ -44,14 +45,16 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .item .acts{display:none; margin-top:10px;}
 .item.open{border-color:var(--yellow);}
 .item.open .acts{display:block;}
-.rowbtns{display:flex; gap:12px;}
-.rowbtns button{flex:1; min-height:70px; font-size:26px; font-weight:800; border-radius:14px;}
+.rowbtns{display:flex; gap:8px; justify-content:flex-start; flex-wrap:wrap;}
+.rowbtns button{flex:0 0 auto; width:fit-content; min-height:0; height:auto;
+  font-size:16px; font-weight:800; border-radius:12px; padding:8px 12px;}
 .minirow{display:flex; gap:8px; justify-content:flex-start; align-items:flex-start; flex-wrap:wrap; margin-top:10px;}
 .mini{display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
   width:fit-content; flex:0 0 auto; height:2.8em; line-height:1.15; white-space:nowrap;
   font-size:16px; font-weight:800; border-radius:12px; padding:0 10px; margin:0;}
 .up,.dn{background:var(--card2); color:var(--yellow); border:2px solid var(--line);
-  width:70px; min-height:70px; font-size:34px; border-radius:14px;}
+  width:fit-content; min-width:2.2em; min-height:0; height:2.2em; padding:0 8px;
+  font-size:18px; border-radius:10px; line-height:1;}
 .prow{display:flex; gap:10px; align-items:stretch;}
 .prow .body{flex:1;}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
@@ -76,7 +79,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 </head>
 <body>
 <header><span class="mark">📅</span><h1 id="hdr">Scheduler</h1>
-<button id="rescan" class="b-gray" style="min-height:56px;min-width:56px;font-size:28px;border-radius:14px;">↻</button>
+<button id="rescan" class="b-gray" style="width:fit-content;min-height:0;height:2.2em;padding:0 10px;font-size:18px;border-radius:10px;">↻</button>
 </header>
 <main>
 <div id="alertBanner" class="banner"></div>
@@ -119,7 +122,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.5</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.6</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -347,7 +350,7 @@ function render(){
   ).join(""):'<p class="empty">No priorities 📅</p>';
   const dn=board.items.filter(i=>i.status==="completed");
   document.getElementById("doneList").innerHTML=dn.length?dn.map(it=>card(it,
-   '<button class="big b-red" onclick="act(\''+it.id+'\',\'del\')">Delete</button>'
+   '<button class="mini b-red" onclick="act(\''+it.id+'\',\'del\')">🗑<br>Delete</button>'
   )).join(""):'<p class="empty">Nothing completed yet 📅</p>';
   const dl2=board.items.filter(i=>i.status==="deleted");
   document.getElementById("delList").innerHTML=dl2.length?dl2.map(it=>{
