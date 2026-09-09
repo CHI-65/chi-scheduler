@@ -46,6 +46,10 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .item.open .acts{display:block;}
 .rowbtns{display:flex; gap:12px;}
 .rowbtns button{flex:1; min-height:70px; font-size:26px; font-weight:800; border-radius:14px;}
+.minirow{display:flex; gap:8px; justify-content:flex-start; align-items:flex-start; flex-wrap:wrap; margin-top:10px;}
+.mini{display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+  width:fit-content; flex:0 0 auto; height:2.8em; line-height:1.15; white-space:nowrap;
+  font-size:16px; font-weight:800; border-radius:12px; padding:0 10px; margin:0;}
 .up,.dn{background:var(--card2); color:var(--yellow); border:2px solid var(--line);
   width:70px; min-height:70px; font-size:34px; border-radius:14px;}
 .prow{display:flex; gap:10px; align-items:stretch;}
@@ -115,7 +119,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.3</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.5</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -293,6 +297,7 @@ async function act(id,what){const it=find(id); if(!it)return;
   if(what==="C"){it.skipped=true;}
   if(what==="del"){it.status="deleted";it.deletedAt=new Date().toISOString();}
   if(what==="doneFromPri"){it.status="completed";it.completedAt=new Date().toISOString();}
+  if(what==="back"){it.status="inbox"; it.ord=0;}
   await saveBoard(); render();}
 async function move(id,dir){const pris=board.items.filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0));
@@ -322,9 +327,11 @@ function tgl(n){document.getElementById("c"+n).classList.toggle("open");}
 function render(){
   const ib=board.items.filter(i=>i.status==="inbox");
   document.getElementById("inboxList").innerHTML=ib.length?ib.map(it=>card(it,
-    '<button class="big b-yellow" onclick="act(\''+it.id+'\',\'A\')">A · Add to priorities</button>'
-   +'<button class="big b-green" onclick="act(\''+it.id+'\',\'B\')">B · Mark complete</button>'
-   +'<button class="big b-gray" onclick="act(\''+it.id+'\',\'C\')">C · Skip</button>'
+    '<div class="minirow">'
+   +'<button class="mini b-yellow" onclick="act(\''+it.id+'\',\'A\')">📅<br>Add</button>'
+   +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'B\')">✅<br>Done</button>'
+   +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'C\')">·<br>Skip</button>'
+   +'</div>'
   )).join(""):'<p class="empty">Inbox empty 📅</p>';
   const pr=board.items.filter(i=>i.status==="priority").sort((a,b)=>(a.ord||0)-(b.ord||0));
   document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>
@@ -333,7 +340,10 @@ function render(){
    +'<div class="ttl">'+esc(it.title)+'</div></div>'
    +'<div><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button><br>'
    +'<button class="dn" style="margin-top:8px" onclick="move(\''+it.id+'\',1)">▼</button></div>'
-   +'</div><button class="big b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">Mark complete</button></div>'
+   +'</div><div class="minirow">'
+   +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">✅<br>Done</button>'
+   +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'back\')">📥<br>Inbox</button>'
+   +'</div></div>'
   ).join(""):'<p class="empty">No priorities 📅</p>';
   const dn=board.items.filter(i=>i.status==="completed");
   document.getElementById("doneList").innerHTML=dn.length?dn.map(it=>card(it,

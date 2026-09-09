@@ -1,5 +1,5 @@
 /* chi-scheduler updater. Bump V on every publish. */
-const V="chi-scheduler-1.3";
+const V="chi-scheduler-1.5";
 self.addEventListener("install",function(){self.skipWaiting();});
 self.addEventListener("activate",function(e){
   e.waitUntil(self.clients.claim());
