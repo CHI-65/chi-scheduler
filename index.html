@@ -156,9 +156,14 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
     <button class="big b-yellow" style="margin-left:8px;" onclick="saveFreqCustom()">Save custom</button>
   </div>
   <button class="big b-yellow" onclick="testGlobalAlert()">🔔 Test alarm</button>
-  <p class="note">Test starts a looping alarm (sound + banner) until you tap Turn off. Reminders only work while the app is open. Personal reminders, never fleet-fail texts.</p>
+  <p class="note">In-app test: looping siren until Turn off (app must be open).</p>
+  <h2>Closed-app alerts</h2>
+  <button class="big b-yellow" id="smsBtn" onclick="toggleSmsReminders()">📱 Text me when due — Off</button>
+  <p class="note">When On, 🎹 texts you 📅 PRIORITY ALERT on the interval even if this app is closed. Uses the same pager mouth as smoke tests. Not a fleet-fail text.</p>
+  <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
+  <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.11</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.12</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -455,6 +460,8 @@ function render(){
   else if(rm>0){fre.value="custom"; wrap.style.display="block"; cin.value=String(rm);}
   else{fre.value="0"; wrap.style.display="none";}
   armReminder();
+  paintSmsBtn();
+  paintNotifBtn();
 }
 
 /* ---------- reminders ---------- */
@@ -539,6 +546,57 @@ function silenceAlarm(){
   b.classList.remove("on");
   b.style.display="none";
 }
+function paintSmsBtn(){
+  const on=!!(board&&board.smsReminders);
+  const b=document.getElementById("smsBtn");
+  if(!b)return;
+  b.textContent=on?"📱 Text me when due — On":"📱 Text me when due — Off";
+  b.className=on?"big b-green":"big b-yellow";
+}
+async function toggleSmsReminders(){
+  if(!board)return;
+  board.smsReminders=!board.smsReminders;
+  await saveBoard();
+  paintSmsBtn();
+}
+function paintNotifBtn(){
+  const b=document.getElementById("notifBtn");
+  const m=document.getElementById("notifMsg");
+  if(!b)return;
+  if(!("Notification" in window)){
+    b.style.display="none";
+    if(m)m.textContent="This browser has no Notification API.";
+    return;
+  }
+  const p=Notification.permission;
+  if(p==="granted"){b.textContent="🔔 Notifications on"; b.className="big b-green";}
+  else if(p==="denied"){b.textContent="🔔 Notifications blocked"; b.className="big b-gray";}
+  else{b.textContent="🔔 Allow phone notifications"; b.className="big b-gray";}
+}
+async function enableNotifs(){
+  if(!("Notification" in window))return;
+  unlockAudio();
+  const p=await Notification.requestPermission();
+  paintNotifBtn();
+  const m=document.getElementById("notifMsg");
+  if(m){
+    if(p==="granted") m.textContent="Allowed. System banners can show when the app is open or woken; closed-app texts still need Text me when due.";
+    else if(p==="denied") m.textContent="Blocked in iOS Settings → Notifications → 📅 Scheduler.";
+    else m.textContent="Permission not granted yet.";
+  }
+  if(p==="granted") pingSystemNotif("📅 Scheduler notifications are on.");
+}
+function pingSystemNotif(body){
+  try{
+    if(!("Notification" in window)||Notification.permission!=="granted")return;
+    const opts={body:body||"", tag:"chi-scheduler-alert", renotify:true, requireInteraction:true};
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+      navigator.serviceWorker.ready.then(function(r){
+        r.showNotification("📅 PRIORITY ALERT", opts);
+      }).catch(function(){ new Notification("📅 PRIORITY ALERT", opts); });
+    } else new Notification("📅 PRIORITY ALERT", opts);
+  }catch(e){}
+}
 function showAlert(it){
   unlockAudio();
   const b=document.getElementById("alertBanner");
@@ -551,6 +609,7 @@ function showAlert(it){
   b.classList.add("on");
   alarmOn=true;
   startAlarmSound();
+  pingSystemNotif(line);
 }
 function armReminder(){
   if(remTimer)clearInterval(remTimer);
