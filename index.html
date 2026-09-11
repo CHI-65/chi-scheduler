@@ -74,6 +74,10 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .alertpick button{flex:0 0 auto; min-height:2.6em; font-size:16px; font-weight:800;
   border-radius:12px; padding:8px 12px; background:#000; color:#fff; border:2px solid var(--line);}
 .alertpick button.sel{border-color:var(--yellow); color:var(--yellow);}
+.alertpick .cust{display:flex; gap:8px; width:100%; align-items:center; flex-wrap:wrap;}
+.alertpick input[type=number],#freqCustom{
+  width:7em; font-size:18px; padding:10px 12px; border-radius:12px;
+  border:2px solid var(--line); background:var(--card); color:var(--ink);}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
   border-top:2px solid var(--line); display:flex;
   padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
@@ -136,10 +140,16 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
     <option value="60">Every hour</option>
     <option value="180">Every 3 hours</option>
     <option value="1440">Once a day</option>
+    <option value="custom">Custom…</option>
   </select>
-  <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
+  <div id="freqCustWrap" style="display:none;margin:8px 0;">
+    <input type="number" id="freqCustom" min="1" step="1" placeholder="Minutes" inputmode="numeric">
+    <button class="big b-yellow" style="margin-left:8px;" onclick="saveFreqCustom()">Save custom</button>
+  </div>
+  <button class="big b-yellow" onclick="testGlobalAlert()">🔔 Test alarm</button>
+  <p class="note">Test fires the yellow 📅 PRIORITY ALERT banner now (uses top priority if you have one). Reminders only show while the app is open. Personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.9</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.10</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -323,10 +333,29 @@ async function act(id,what){const it=find(id); if(!it)return;
   await saveBoard(); render();}
 function alertLabel(m){m=Number(m)||0;
   return {0:"Off",30:"30m",60:"1h",180:"3h",1440:"Day"}[m]||(m+"m");}
+function presetMins(m){return [0,30,60,180,1440].indexOf(Number(m)||0)>=0;}
 function tglAlert(n){const el=document.getElementById("ap"+n);
   if(el)el.classList.toggle("on");}
 async function setItemAlert(id,mins){const it=find(id); if(!it)return;
   it.alertMins=Number(mins)||0; await saveBoard(); render();}
+function showCust(n){const w=document.getElementById("ac"+n);
+  if(w)w.style.display=w.style.display==="flex"?"none":"flex";
+  const i=document.getElementById("ai"+n); if(i){i.focus(); i.select&&i.select();}}
+async function saveItemCustom(id,n){const i=document.getElementById("ai"+n);
+  const v=Number(i&&i.value); if(!v||v<1){i&&i.focus(); return;}
+  await setItemAlert(id,Math.floor(v));}
+function testItemAlert(id){const it=find(id); if(it) showAlert(it);}
+function testGlobalAlert(){
+  const top=(board.items||[]).filter(i=>i.status==="priority")
+    .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
+  if(top) showAlert(top);
+  else{
+    const b=document.getElementById("alertBanner");
+    b.textContent="📅 PRIORITY ALERT — (test) — no priorities yet";
+    b.style.display="block";
+    setTimeout(()=>b.style.display="none",30000);
+  }
+}
 async function move(id,dir){const pris=board.items.filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0));
   const i=pris.findIndex(p=>p.id===id); const j=i+dir;
@@ -366,10 +395,18 @@ function render(){
   document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>{
     const am=Number(it.alertMins)||0;
     const bellOn=am>0?" on":"";
+    const customSel=!presetMins(am)&&am>0;
     const picks=[0,30,60,180,1440].map(function(m){
       return '<button class="'+(am===m?"sel":"")+'" onclick="setItemAlert(\''+it.id+'\','+m+')">'
         +alertLabel(m)+'</button>';
-    }).join("");
+    }).join("")
+      +'<button class="'+(customSel?"sel":"")+'" onclick="showCust('+it.n+')">Custom</button>'
+      +'<button onclick="testItemAlert(\''+it.id+'\')">🔔 Test</button>'
+      +'<div class="cust" id="ac'+it.n+'" style="display:'+(customSel?"flex":"none")+'">'
+      +'<input type="number" id="ai'+it.n+'" min="1" step="1" inputmode="numeric" placeholder="min"'
+      +' value="'+(am>0&&!presetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
+      +'<button class="b-yellow" onclick="saveItemCustom(\''+it.id+'\','+it.n+')">Set</button>'
+      +'</div>';
     return '<div class="item open"><div class="prow">'
    +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglAlert('+it.n+')">'
    +(am>0?"🔔":"🔕")+'</button>'
@@ -406,13 +443,32 @@ function render(){
       +'<button class="mini b-yellow" onclick="act(\''+it.id+'\',\'restorePri\')">📅<br>Priorities</button>'
       +'</div></div></div></div>';
   }).join(""):'<p class="note">Empty.</p>';
-  document.getElementById("freq").value=String(board.reminderMins||0);
+  const rm=Number(board.reminderMins)||0;
+  const fre=document.getElementById("freq");
+  const wrap=document.getElementById("freqCustWrap");
+  const cin=document.getElementById("freqCustom");
+  if(presetMins(rm)){fre.value=String(rm); wrap.style.display="none";}
+  else if(rm>0){fre.value="custom"; wrap.style.display="block"; cin.value=String(rm);}
+  else{fre.value="0"; wrap.style.display="none";}
   armReminder();
 }
 
 /* ---------- reminders ---------- */
-function setFreq(){board.reminderMins=Number(document.getElementById("freq").value);
-  saveBoard(); armReminder();}
+function setFreq(){
+  const v=document.getElementById("freq").value;
+  const wrap=document.getElementById("freqCustWrap");
+  if(v==="custom"){wrap.style.display="block";
+    document.getElementById("freqCustom").focus(); return;}
+  wrap.style.display="none";
+  board.reminderMins=Number(v)||0; saveBoard(); armReminder();}
+function saveFreqCustom(){
+  const v=Math.floor(Number(document.getElementById("freqCustom").value)||0);
+  if(v<1){document.getElementById("freqCustom").focus(); return;}
+  board.reminderMins=v; saveBoard(); armReminder();
+  const fre=document.getElementById("freq");
+  if(presetMins(v)) fre.value=String(v);
+  else fre.value="custom";
+}
 function showAlert(it){
   const b=document.getElementById("alertBanner");
   b.textContent="📅 PRIORITY ALERT — "+it.title+" — "+it.id;
