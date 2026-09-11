@@ -64,6 +64,16 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .prow .body{flex:1; min-width:0;}
 .prow .acts{flex:0 0 auto;}
 .prow .movers{display:flex; flex-direction:column; gap:6px; flex:0 0 auto;}
+.bell{display:inline-flex; align-items:center; justify-content:center;
+  width:fit-content; min-width:2.4em; height:2.4em; padding:0 8px; margin:0 4px 0 0;
+  font-size:28px; background:#000; color:#fff; border:2px solid var(--line);
+  border-radius:12px; line-height:1;}
+.bell.on{border-color:var(--yellow); color:var(--yellow);}
+.alertpick{display:none; width:100%; margin-top:10px; gap:8px; flex-wrap:wrap;}
+.alertpick.on{display:flex;}
+.alertpick button{flex:0 0 auto; min-height:2.6em; font-size:16px; font-weight:800;
+  border-radius:12px; padding:8px 12px; background:#000; color:#fff; border:2px solid var(--line);}
+.alertpick button.sel{border-color:var(--yellow); color:var(--yellow);}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
   border-top:2px solid var(--line); display:flex;
   padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
@@ -129,7 +139,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   </select>
   <p class="note">Reminders show as the yellow banner at the top while the app is open. Format: 📅 PRIORITY ALERT + title + number. These are personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.8</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.9</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -148,7 +158,7 @@ const INBOX=ROOT+"/calendar-inbox";
 const DONE=ROOT+"/calendar-inbox-done";
 const ARCH=ROOT+"/calendar-archive";
 const BOARD=ROOT+"/calendar-board.json";
-let board=null, tab="inbox", remTimer=null;
+let board=null, tab="inbox", remTimer=null, itemAlertTimers=[];
 
 /* ---------- storage ---------- */
 const LS=window.localStorage;
@@ -301,14 +311,22 @@ async function scan(){
 /* ---------- actions ---------- */
 function find(id){return board.items.find(i=>i.id===id);}
 async function act(id,what){const it=find(id); if(!it)return;
-  if(what==="A"){it.status="priority";
-    it.ord=1+Math.max(0,...board.items.filter(i=>i.status==="priority").map(i=>i.ord||0));}
+  if(what==="A"||what==="restorePri"){it.status="priority"; it.skipped=false;
+    delete it.deletedAt;
+    it.ord=1+Math.max(0,...board.items.filter(i=>i.status==="priority"&&i.id!==it.id).map(i=>i.ord||0));}
   if(what==="B"){it.status="completed";it.completedAt=new Date().toISOString();}
   if(what==="C"){it.skipped=true;}
   if(what==="del"){it.status="deleted";it.deletedAt=new Date().toISOString();}
   if(what==="doneFromPri"){it.status="completed";it.completedAt=new Date().toISOString();}
-  if(what==="back"){it.status="inbox"; it.ord=0;}
+  if(what==="back"||what==="restoreInbox"||what==="undelete"){
+    it.status="inbox"; it.ord=0; it.skipped=false; delete it.deletedAt;}
   await saveBoard(); render();}
+function alertLabel(m){m=Number(m)||0;
+  return {0:"Off",30:"30m",60:"1h",180:"3h",1440:"Day"}[m]||(m+"m");}
+function tglAlert(n){const el=document.getElementById("ap"+n);
+  if(el)el.classList.toggle("on");}
+async function setItemAlert(id,mins){const it=find(id); if(!it)return;
+  it.alertMins=Number(mins)||0; await saveBoard(); render();}
 async function move(id,dir){const pris=board.items.filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0));
   const i=pris.findIndex(p=>p.id===id); const j=i+dir;
@@ -345,9 +363,18 @@ function render(){
    +'</div>'
   )).join(""):'<p class="empty">Inbox empty 📅</p>';
   const pr=board.items.filter(i=>i.status==="priority").sort((a,b)=>(a.ord||0)-(b.ord||0));
-  document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>
-   '<div class="item open"><div class="prow">'
-   +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id+'</div>'
+  document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>{
+    const am=Number(it.alertMins)||0;
+    const bellOn=am>0?" on":"";
+    const picks=[0,30,60,180,1440].map(function(m){
+      return '<button class="'+(am===m?"sel":"")+'" onclick="setItemAlert(\''+it.id+'\','+m+')">'
+        +alertLabel(m)+'</button>';
+    }).join("");
+    return '<div class="item open"><div class="prow">'
+   +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglAlert('+it.n+')">'
+   +(am>0?"🔔":"🔕")+'</button>'
+   +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id
+   +(am>0?(' · 🔔 '+alertLabel(am)):"")+'</div>'
    +'<div class="ttl">'+esc(it.title)+'</div></div>'
    +'<div class="acts minirow">'
    +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">✅<br>Done</button>'
@@ -355,17 +382,29 @@ function render(){
    +'</div>'
    +'<div class="movers"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
    +'<button class="dn" onclick="move(\''+it.id+'\',1)">▼</button></div>'
-   +'</div></div>'
-  ).join(""):'<p class="empty">No priorities 📅</p>';
+   +'</div>'
+   +'<div class="alertpick" id="ap'+it.n+'" onclick="event.stopPropagation()">'+picks+'</div>'
+   +'</div>';
+  }).join(""):'<p class="empty">No priorities 📅</p>';
   const dn=board.items.filter(i=>i.status==="completed");
   document.getElementById("doneList").innerHTML=dn.length?dn.map(it=>card(it,
-   '<button class="mini b-red" onclick="act(\''+it.id+'\',\'del\')">🗑<br>Delete</button>'
+    '<div class="minirow">'
+   +'<button class="mini b-yellow" onclick="act(\''+it.id+'\',\'restorePri\')">📅<br>Priorities</button>'
+   +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'restoreInbox\')">📥<br>Inbox</button>'
+   +'<button class="mini b-red" onclick="act(\''+it.id+'\',\'del\')">🗑<br>Delete</button>'
+   +'</div>'
   )).join(""):'<p class="empty">Nothing completed yet 📅</p>';
   const dl2=board.items.filter(i=>i.status==="deleted");
   document.getElementById("delList").innerHTML=dl2.length?dl2.map(it=>{
     const days=Math.max(0,15-Math.floor((Date.now()-new Date(it.deletedAt))/864e5));
-    return '<div class="item"><div class="cat">'+it.id+'</div><div class="ttl">'
-      +esc(it.title)+'</div><div class="sub">archives in '+days+' days</div></div>';
+    return '<div class="item open"><div class="itemrow"><div class="body">'
+      +'<div class="cat">'+it.id+'</div><div class="ttl">'+esc(it.title)+'</div>'
+      +'<div class="sub">archives in '+days+' days</div></div>'
+      +'<div class="acts" onclick="event.stopPropagation()">'
+      +'<div class="minirow">'
+      +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'undelete\')">📥<br>Inbox</button>'
+      +'<button class="mini b-yellow" onclick="act(\''+it.id+'\',\'restorePri\')">📅<br>Priorities</button>'
+      +'</div></div></div></div>';
   }).join(""):'<p class="note">Empty.</p>';
   document.getElementById("freq").value=String(board.reminderMins||0);
   armReminder();
@@ -374,18 +413,30 @@ function render(){
 /* ---------- reminders ---------- */
 function setFreq(){board.reminderMins=Number(document.getElementById("freq").value);
   saveBoard(); armReminder();}
-function armReminder(){if(remTimer)clearInterval(remTimer);
+function showAlert(it){
+  const b=document.getElementById("alertBanner");
+  b.textContent="📅 PRIORITY ALERT — "+it.title+" — "+it.id;
+  b.style.display="block";
+  setTimeout(()=>b.style.display="none",30000);
+}
+function armReminder(){
+  if(remTimer)clearInterval(remTimer);
+  itemAlertTimers.forEach(clearInterval);
+  itemAlertTimers=[];
   const m=board&&board.reminderMins;
-  if(!m)return;
-  remTimer=setInterval(()=>{
-    const top=board.items.filter(i=>i.status==="priority")
-      .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
-    if(!top)return;
-    const b=document.getElementById("alertBanner");
-    b.textContent="📅 PRIORITY ALERT — "+top.title+" — "+top.id;
-    b.style.display="block";
-    setTimeout(()=>b.style.display="none",30000);
-  },m*60000);}
+  if(m){
+    remTimer=setInterval(()=>{
+      const top=board.items.filter(i=>i.status==="priority")
+        .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
+      if(top) showAlert(top);
+    },m*60000);
+  }
+  for(const it of (board&&board.items)||[]){
+    const am=Number(it.alertMins)||0;
+    if(it.status!=="priority"||!am) continue;
+    itemAlertTimers.push(setInterval(()=>showAlert(it), am*60000));
+  }
+}
 
 /* ---------- nav / boot ---------- */
 function go(t){tab=t;
