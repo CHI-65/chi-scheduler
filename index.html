@@ -86,7 +86,13 @@ nav button{flex:1; background:none; color:var(--dim); font-size:19px;
 nav button .ico{display:block; font-size:32px;}
 nav button.cur{color:var(--yellow); background:var(--card);}
 .banner{background:var(--yellow); color:#0B0B0B; font-size:24px; font-weight:800;
-  padding:16px; border-radius:14px; margin:12px 0; display:none;}
+  padding:16px; border-radius:14px; margin:12px 0; display:none; position:relative;}
+.banner.on{display:block; animation:pulse 1s ease-in-out infinite;}
+@keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.15)}}
+.banner .banTxt{display:block; margin-bottom:12px;}
+.banner .banOff{display:block; width:100%; min-height:3em; font-size:22px; font-weight:900;
+  border-radius:14px; padding:14px; background:#0B0B0B; color:var(--yellow);
+  border:3px solid #0B0B0B;}
 .note{color:var(--dim); font-size:20px; margin:10px 0;}
 input[type=text],input[type=password]{width:100%; font-size:26px; padding:16px;
   border-radius:14px; border:2px solid var(--line); background:var(--card);
@@ -103,7 +109,10 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 <button id="rescan" class="b-gray" style="width:fit-content;min-height:0;height:2.2em;padding:0 10px;font-size:18px;border-radius:10px;">↻</button>
 </header>
 <main>
-<div id="alertBanner" class="banner"></div>
+<div id="alertBanner" class="banner">
+  <span class="banTxt" id="alertText"></span>
+  <button type="button" class="banOff" onclick="silenceAlarm()">🔕 Turn off alarm</button>
+</div>
 
 <div id="s-setup" class="screen">
   <p class="note">📅 One-time setup. Enter the Dropbox app key, then sign in. Nothing is typed after this.</p>
@@ -147,9 +156,9 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
     <button class="big b-yellow" style="margin-left:8px;" onclick="saveFreqCustom()">Save custom</button>
   </div>
   <button class="big b-yellow" onclick="testGlobalAlert()">🔔 Test alarm</button>
-  <p class="note">Test fires the yellow 📅 PRIORITY ALERT banner now (uses top priority if you have one). Reminders only show while the app is open. Personal reminders, never fleet-fail texts.</p>
+  <p class="note">Test starts a looping alarm (sound + banner) until you tap Turn off. Reminders only work while the app is open. Personal reminders, never fleet-fail texts.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.10</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.11</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -349,12 +358,7 @@ function testGlobalAlert(){
   const top=(board.items||[]).filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
   if(top) showAlert(top);
-  else{
-    const b=document.getElementById("alertBanner");
-    b.textContent="📅 PRIORITY ALERT — (test) — no priorities yet";
-    b.style.display="block";
-    setTimeout(()=>b.style.display="none",30000);
-  }
+  else showAlert({title:"(test) — no priorities yet", id:"📅"});
 }
 async function move(id,dir){const pris=board.items.filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0));
@@ -469,11 +473,84 @@ function saveFreqCustom(){
   if(presetMins(v)) fre.value=String(v);
   else fre.value="custom";
 }
-function showAlert(it){
+let audioCtx=null, alarmNodes=[], alarmOn=false, vibTimer=null;
+function unlockAudio(){
+  try{
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==="suspended") audioCtx.resume();
+  }catch(e){}
+}
+document.addEventListener("pointerdown",unlockAudio,{passive:true});
+document.addEventListener("touchstart",unlockAudio,{passive:true});
+document.addEventListener("click",unlockAudio,{passive:true});
+
+function stopAlarmSound(){
+  alarmNodes.forEach(function(n){try{n.stop();}catch(e){} try{n.disconnect();}catch(e){}});
+  alarmNodes=[];
+  if(vibTimer){clearInterval(vibTimer); vibTimer=null;}
+  try{if(navigator.vibrate) navigator.vibrate(0);}catch(e){}
+}
+function startAlarmSound(){
+  unlockAudio();
+  stopAlarmSound();
+  if(!audioCtx) return;
+  const now=audioCtx.currentTime;
+  // looping two-tone siren until silenceAlarm
+  function tone(freq, start, dur){
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    o.type="square";
+    o.frequency.value=freq;
+    g.gain.value=0.0001;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.22, start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, start+dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(start); o.stop(start+dur+0.02);
+    alarmNodes.push(o,g);
+  }
+  // schedule ~60s of beeps; re-arm while alarmOn
+  function scheduleBurst(t0){
+    if(!alarmOn) return;
+    for(let i=0;i<40;i++){
+      const t=t0+i*0.55;
+      tone(880, t, 0.22);
+      tone(660, t+0.28, 0.22);
+    }
+    // re-schedule before burst ends
+    setTimeout(function(){
+      if(alarmOn) scheduleBurst(audioCtx.currentTime);
+    }, 20000);
+  }
+  scheduleBurst(now);
+  try{
+    if(navigator.vibrate){
+      navigator.vibrate([400,200,400,200,400]);
+      vibTimer=setInterval(function(){
+        if(alarmOn) navigator.vibrate([400,200,400,200,400]);
+      }, 2000);
+    }
+  }catch(e){}
+}
+function silenceAlarm(){
+  alarmOn=false;
+  stopAlarmSound();
   const b=document.getElementById("alertBanner");
-  b.textContent="📅 PRIORITY ALERT — "+it.title+" — "+it.id;
+  b.classList.remove("on");
+  b.style.display="none";
+}
+function showAlert(it){
+  unlockAudio();
+  const b=document.getElementById("alertBanner");
+  const tx=document.getElementById("alertText");
+  const line=it
+    ? ("📅 PRIORITY ALERT — "+it.title+" — "+it.id)
+    : "📅 PRIORITY ALERT — (test)";
+  tx.textContent=line;
   b.style.display="block";
-  setTimeout(()=>b.style.display="none",30000);
+  b.classList.add("on");
+  alarmOn=true;
+  startAlarmSound();
 }
 function armReminder(){
   if(remTimer)clearInterval(remTimer);
