@@ -81,9 +81,20 @@ button{font-family:inherit; border:none; cursor:pointer;}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
   border-top:2px solid var(--line); display:flex;
   padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
-nav button{flex:1; background:none; color:var(--dim); font-size:19px;
-  font-weight:700; padding:10px 2px; border-radius:12px;}
-nav button .ico{display:block; font-size:32px;}
+nav button{flex:1; background:none; color:var(--dim); font-size:14px;
+  font-weight:700; padding:8px 1px; border-radius:12px;}
+nav button .ico{display:block; font-size:26px;}
+input[type=datetime-local]{width:100%; font-size:22px; padding:14px;
+  border-radius:14px; border:2px solid var(--line); background:var(--card);
+  color:var(--ink); margin:8px 0; color-scheme:dark;}
+.evrow{display:flex; flex-direction:column; gap:6px; margin-top:10px;}
+.evslot{display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+.evslot .lbl{font-size:16px; color:var(--dim); min-width:3.2em; font-weight:700;}
+.priSlots{display:none; width:100%; margin-top:10px;}
+.priSlots.on{display:block;}
+.priSlot{margin:8px 0; padding-top:6px; border-top:1px solid var(--line);}
+.priSlot:first-child{border-top:none; padding-top:0;}
+.priSlot .slbl{font-size:15px; color:var(--dim); font-weight:700; margin-bottom:6px;}
 nav button.cur{color:var(--yellow); background:var(--card);}
 .banner{background:var(--yellow); color:#0B0B0B; font-size:24px; font-weight:800;
   padding:16px; border-radius:14px; margin:12px 0; display:none; position:relative;}
@@ -135,6 +146,23 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 
 <div id="s-pri" class="screen"><div id="priList"></div></div>
 
+<div id="s-evt" class="screen">
+  <button class="big b-yellow" onclick="showAddEvt()">＋ Add event</button>
+  <div id="addEvtBox" style="display:none;">
+    <input type="text" id="evtTitle" placeholder="Event title">
+    <input type="datetime-local" id="evtWhen">
+    <input type="text" id="evtWhere" placeholder="Where (optional)">
+    <div class="rowbtns">
+      <button class="b-green" onclick="addEvent()">Save</button>
+      <button class="b-gray" onclick="hideAddEvt()">Cancel</button>
+    </div>
+  </div>
+  <h2>Upcoming</h2>
+  <div id="evtUpList"></div>
+  <h2>Past</h2>
+  <div id="evtPastList"></div>
+</div>
+
 <div id="s-done" class="screen">
   <div id="doneList"></div>
   <h2>Deleted (kept 15 days)</h2>
@@ -163,7 +191,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.12</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.13</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -172,6 +200,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 <nav>
   <button id="n-inbox" onclick="go('inbox')"><span class="ico">📥</span>Inbox</button>
   <button id="n-pri" onclick="go('pri')"><span class="ico">📅</span>Priorities</button>
+  <button id="n-evt" onclick="go('evt')"><span class="ico">🗓️</span>Events</button>
   <button id="n-done" onclick="go('done')"><span class="ico">✅</span>Done</button>
   <button id="n-set" onclick="go('set')"><span class="ico">⚙️</span>Settings</button>
 </nav>
@@ -182,7 +211,7 @@ const INBOX=ROOT+"/calendar-inbox";
 const DONE=ROOT+"/calendar-inbox-done";
 const ARCH=ROOT+"/calendar-archive";
 const BOARD=ROOT+"/calendar-board.json";
-let board=null, tab="inbox", remTimer=null, itemAlertTimers=[];
+let board=null, tab="inbox", remTimer=null, itemAlertTimers=[], eventRemTimer=null;
 
 /* ---------- storage ---------- */
 const LS=window.localStorage;
@@ -278,13 +307,41 @@ async function mv(from,to){return rpc("files/move_v2",
   {from_path:from,to_path:to,autorename:true});}
 
 /* ---------- board ---------- */
-function freshBoard(){return{nextNum:1,items:[],reminderMins:0};}
+function freshBoard(){return{nextNum:1,nextEventNum:1,items:[],events:[],reminderMins:0};}
 function num(n){return "📅-"+String(n).padStart(4,"0");}
+function evtNum(n){return "🗓️-"+String(n).padStart(4,"0");}
+function normalizeItemAlerts(it){
+  if(!Array.isArray(it.alerts)){
+    const a=Number(it.alertMins)||0;
+    it.alerts=[a,0,0];
+  }
+  while(it.alerts.length<3) it.alerts.push(0);
+  it.alerts=it.alerts.slice(0,3).map(function(m){return Number(m)||0;});
+  it.alertMins=it.alerts[0]||0;
+}
+function normalizeEvent(ev){
+  if(!Array.isArray(ev.alerts)) ev.alerts=[0,0,0];
+  while(ev.alerts.length<3) ev.alerts.push(0);
+  ev.alerts=ev.alerts.slice(0,3).map(function(m){return Number(m)||0;});
+  if(!Array.isArray(ev.fired)) ev.fired=[];
+  if(!ev.status) ev.status="open";
+}
 async function loadBoard(){const t=await dl(BOARD);
   board=t?JSON.parse(t):freshBoard();
   if(!board.items)board.items=[];
-  if(!board.nextNum)board.nextNum=1;}
-async function saveBoard(){await up(BOARD,JSON.stringify(board,null,1));}
+  if(!board.events)board.events=[];
+  if(!board.nextNum)board.nextNum=1;
+  if(!board.nextEventNum)board.nextEventNum=1;
+  for(const it of board.items) normalizeItemAlerts(it);
+  for(const ev of board.events) normalizeEvent(ev);}
+async function saveBoard(){
+  for(const it of (board.items||[])){
+    normalizeItemAlerts(it);
+    it.alertMins=it.alerts[0]||0;
+  }
+  for(const ev of (board.events||[])) normalizeEvent(ev);
+  await up(BOARD,JSON.stringify(board,null,1));
+}
 
 /* ---------- scan on open ---------- */
 async function scan(){
@@ -348,17 +405,76 @@ async function act(id,what){const it=find(id); if(!it)return;
 function alertLabel(m){m=Number(m)||0;
   return {0:"Off",30:"30m",60:"1h",180:"3h",1440:"Day"}[m]||(m+"m");}
 function presetMins(m){return [0,30,60,180,1440].indexOf(Number(m)||0)>=0;}
+function eventAlertLabel(m){m=Number(m)||0;
+  return {0:"Off",15:"15m",30:"30m",60:"1h",120:"2h",1440:"1d"}[m]||(m+"m");}
+function eventPresetMins(m){return [0,15,30,60,120,1440].indexOf(Number(m)||0)>=0;}
 function tglAlert(n){const el=document.getElementById("ap"+n);
   if(el)el.classList.toggle("on");}
-async function setItemAlert(id,mins){const it=find(id); if(!it)return;
-  it.alertMins=Number(mins)||0; await saveBoard(); render();}
-function showCust(n){const w=document.getElementById("ac"+n);
+async function setItemAlertSlot(id,slot,mins){const it=find(id); if(!it)return;
+  normalizeItemAlerts(it);
+  it.alerts[slot]=Number(mins)||0;
+  it.alertMins=it.alerts[0]||0;
+  await saveBoard(); render();}
+function showCust(n,slot){const w=document.getElementById("ac"+n+"s"+slot);
   if(w)w.style.display=w.style.display==="flex"?"none":"flex";
-  const i=document.getElementById("ai"+n); if(i){i.focus(); i.select&&i.select();}}
-async function saveItemCustom(id,n){const i=document.getElementById("ai"+n);
+  const i=document.getElementById("ai"+n+"s"+slot); if(i){i.focus(); i.select&&i.select();}}
+async function saveItemCustom(id,n,slot){const i=document.getElementById("ai"+n+"s"+slot);
   const v=Number(i&&i.value); if(!v||v<1){i&&i.focus(); return;}
-  await setItemAlert(id,Math.floor(v));}
+  await setItemAlertSlot(id,slot,Math.floor(v));}
 function testItemAlert(id){const it=find(id); if(it) showAlert(it);}
+function findEvent(id){return (board.events||[]).find(function(e){return e.id===id;});}
+function showAddEvt(){document.getElementById("addEvtBox").style.display="block";
+  document.getElementById("evtTitle").focus();}
+function hideAddEvt(){document.getElementById("addEvtBox").style.display="none";}
+async function addEvent(){
+  const title=document.getElementById("evtTitle").value.trim();
+  const whenEl=document.getElementById("evtWhen").value;
+  const where=document.getElementById("evtWhere").value.trim();
+  if(!title){document.getElementById("evtTitle").focus(); return;}
+  if(!whenEl){document.getElementById("evtWhen").focus(); return;}
+  const when=new Date(whenEl).toISOString();
+  if(!board.nextEventNum) board.nextEventNum=1;
+  const ev={id:evtNum(board.nextEventNum), n:board.nextEventNum,
+    title:title, when:when, where:where||"", alerts:[0,0,0], fired:[], status:"open",
+    added:new Date().toISOString()};
+  board.nextEventNum++;
+  board.events.push(ev);
+  document.getElementById("evtTitle").value="";
+  document.getElementById("evtWhen").value="";
+  document.getElementById("evtWhere").value="";
+  hideAddEvt();
+  await saveBoard(); render();
+}
+async function actEvent(id,what){
+  const ev=findEvent(id); if(!ev)return;
+  if(what==="done"){ev.status="done"; ev.doneAt=new Date().toISOString();}
+  if(what==="del"){board.events=board.events.filter(function(e){return e.id!==id;});}
+  await saveBoard(); render();
+}
+async function setEventAlertSlot(id,slot,mins){
+  const ev=findEvent(id); if(!ev)return;
+  normalizeEvent(ev);
+  ev.alerts[slot]=Number(mins)||0;
+  // changing alert clears fired for that slot so it can fire again
+  ev.fired=ev.fired.filter(function(x){return x!==slot;});
+  await saveBoard(); render();
+}
+function showEvtCust(n,slot){
+  const w=document.getElementById("eac"+n+"s"+slot);
+  if(w)w.style.display=w.style.display==="flex"?"none":"flex";
+  const i=document.getElementById("eai"+n+"s"+slot); if(i){i.focus(); i.select&&i.select();}
+}
+async function saveEvtCustom(id,n,slot){
+  const i=document.getElementById("eai"+n+"s"+slot);
+  const v=Number(i&&i.value); if(!v||v<1){i&&i.focus(); return;}
+  await setEventAlertSlot(id,slot,Math.floor(v));
+}
+function tglEvtAlert(n){const el=document.getElementById("eap"+n);
+  if(el)el.classList.toggle("on");}
+function testEventAlert(id){const ev=findEvent(id); if(ev) showEventAlert(ev);}
+function fmtWhen(iso){
+  try{return new Date(iso).toLocaleString();}catch(e){return iso||"";}
+}
 function testGlobalAlert(){
   const top=(board.items||[]).filter(i=>i.status==="priority")
     .sort((a,b)=>(a.ord||0)-(b.ord||0))[0];
@@ -402,25 +518,33 @@ function render(){
   )).join(""):'<p class="empty">Inbox empty 📅</p>';
   const pr=board.items.filter(i=>i.status==="priority").sort((a,b)=>(a.ord||0)-(b.ord||0));
   document.getElementById("priList").innerHTML=pr.length?pr.map((it,ix)=>{
-    const am=Number(it.alertMins)||0;
-    const bellOn=am>0?" on":"";
-    const customSel=!presetMins(am)&&am>0;
-    const picks=[0,30,60,180,1440].map(function(m){
-      return '<button class="'+(am===m?"sel":"")+'" onclick="setItemAlert(\''+it.id+'\','+m+')">'
-        +alertLabel(m)+'</button>';
-    }).join("")
-      +'<button class="'+(customSel?"sel":"")+'" onclick="showCust('+it.n+')">Custom</button>'
-      +'<button onclick="testItemAlert(\''+it.id+'\')">🔔 Test</button>'
-      +'<div class="cust" id="ac'+it.n+'" style="display:'+(customSel?"flex":"none")+'">'
-      +'<input type="number" id="ai'+it.n+'" min="1" step="1" inputmode="numeric" placeholder="min"'
-      +' value="'+(am>0&&!presetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
-      +'<button class="b-yellow" onclick="saveItemCustom(\''+it.id+'\','+it.n+')">Set</button>'
-      +'</div>';
+    normalizeItemAlerts(it);
+    const anyOn=it.alerts.some(function(a){return a>0;});
+    const bellOn=anyOn?" on":"";
+    const summary=it.alerts.filter(function(a){return a>0;}).map(alertLabel).join(" · ");
+    let slotsHtml='';
+    for(let slot=0;slot<3;slot++){
+      const am=it.alerts[slot];
+      const customSel=!presetMins(am)&&am>0;
+      const picks=[0,30,60,180,1440].map(function(m){
+        return '<button class="'+(am===m?"sel":"")+'" onclick="setItemAlertSlot(\''+it.id+'\','+slot+','+m+')">'
+          +alertLabel(m)+'</button>';
+      }).join("")
+        +'<button class="'+(customSel?"sel":"")+'" onclick="showCust('+it.n+','+slot+')">Custom</button>'
+        +'<div class="cust" id="ac'+it.n+'s'+slot+'" style="display:'+(customSel?"flex":"none")+'">'
+        +'<input type="number" id="ai'+it.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="min"'
+        +' value="'+(am>0&&!presetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
+        +'<button class="b-yellow" onclick="saveItemCustom(\''+it.id+'\','+it.n+','+slot+')">Set</button>'
+        +'</div>';
+      slotsHtml+='<div class="priSlot"><div class="slbl">Reminder '+(slot+1)+'</div>'
+        +'<div class="alertpick on">'+picks+'</div></div>';
+    }
+    slotsHtml+='<button onclick="testItemAlert(\''+it.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
     return '<div class="item open"><div class="prow">'
    +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglAlert('+it.n+')">'
-   +(am>0?"🔔":"🔕")+'</button>'
+   +(anyOn?"🔔":"🔕")+'</button>'
    +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id
-   +(am>0?(' · 🔔 '+alertLabel(am)):"")+'</div>'
+   +(summary?(' · 🔔 '+summary):"")+'</div>'
    +'<div class="ttl">'+esc(it.title)+'</div></div>'
    +'<div class="acts minirow">'
    +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">✅<br>Done</button>'
@@ -429,9 +553,10 @@ function render(){
    +'<div class="movers"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
    +'<button class="dn" onclick="move(\''+it.id+'\',1)">▼</button></div>'
    +'</div>'
-   +'<div class="alertpick" id="ap'+it.n+'" onclick="event.stopPropagation()">'+picks+'</div>'
+   +'<div class="priSlots" id="ap'+it.n+'" onclick="event.stopPropagation()">'+slotsHtml+'</div>'
    +'</div>';
   }).join(""):'<p class="empty">No priorities 📅</p>';
+  renderEvents();
   const dn=board.items.filter(i=>i.status==="completed");
   document.getElementById("doneList").innerHTML=dn.length?dn.map(it=>card(it,
     '<div class="minirow">'
@@ -611,6 +736,18 @@ function showAlert(it){
   startAlarmSound();
   pingSystemNotif(line);
 }
+function showEventAlert(ev){
+  unlockAudio();
+  const b=document.getElementById("alertBanner");
+  const tx=document.getElementById("alertText");
+  const line="📅 EVENT — "+(ev&&ev.title?ev.title:"(event)")+" — "+fmtWhen(ev&&ev.when);
+  tx.textContent=line;
+  b.style.display="block";
+  b.classList.add("on");
+  alarmOn=true;
+  startAlarmSound();
+  pingSystemNotif(line);
+}
 function armReminder(){
   if(remTimer)clearInterval(remTimer);
   itemAlertTimers.forEach(clearInterval);
@@ -624,19 +761,114 @@ function armReminder(){
     },m*60000);
   }
   for(const it of (board&&board.items)||[]){
-    const am=Number(it.alertMins)||0;
-    if(it.status!=="priority"||!am) continue;
-    itemAlertTimers.push(setInterval(()=>showAlert(it), am*60000));
+    if(it.status!=="priority") continue;
+    normalizeItemAlerts(it);
+    for(let s=0;s<3;s++){
+      const am=Number(it.alerts[s])||0;
+      if(!am) continue;
+      itemAlertTimers.push(setInterval(function(){showAlert(it);}, am*60000));
+    }
   }
+  armEventReminders();
+}
+function armEventReminders(){
+  if(eventRemTimer) clearInterval(eventRemTimer);
+  checkEventReminders();
+  eventRemTimer=setInterval(checkEventReminders, 15000);
+}
+function checkEventReminders(){
+  if(!board||!board.events) return;
+  let changed=false;
+  const now=Date.now();
+  for(const ev of board.events){
+    normalizeEvent(ev);
+    if(ev.status!=="open") continue;
+    const whenMs=new Date(ev.when).getTime();
+    if(isNaN(whenMs)) continue;
+    for(let slot=0;slot<3;slot++){
+      const mins=Number(ev.alerts[slot])||0;
+      if(!mins) continue;
+      if(ev.fired.indexOf(slot)>=0) continue;
+      const fireAt=whenMs-mins*60000;
+      if(now<fireAt) continue;
+      // Skip silent backlog older than 2 minutes; mark fired so each slot still fires once
+      if(now-fireAt>120000){
+        ev.fired.push(slot);
+        changed=true;
+        continue;
+      }
+      ev.fired.push(slot);
+      changed=true;
+      showEventAlert(ev);
+    }
+  }
+  if(changed) saveBoard();
+}
+function renderEvents(){
+  const upEl=document.getElementById("evtUpList");
+  const pastEl=document.getElementById("evtPastList");
+  if(!upEl||!pastEl) return;
+  const now=Date.now();
+  const open=(board.events||[]).filter(function(e){return e.status==="open";});
+  const upcoming=open.filter(function(e){return new Date(e.when).getTime()>=now;})
+    .sort(function(a,b){return new Date(a.when)-new Date(b.when);});
+  const past=open.filter(function(e){return new Date(e.when).getTime()<now;})
+    .sort(function(a,b){return new Date(b.when)-new Date(a.when);})
+    .concat((board.events||[]).filter(function(e){return e.status==="done";})
+      .sort(function(a,b){return new Date(b.when)-new Date(a.when);}));
+  function evtCard(ev){
+    normalizeEvent(ev);
+    const anyOn=ev.alerts.some(function(a){return a>0;});
+    const bellOn=anyOn?" on":"";
+    const summary=ev.alerts.filter(function(a){return a>0;}).map(eventAlertLabel).join(" · ");
+    let slots="";
+    for(let slot=0;slot<3;slot++){
+      const am=ev.alerts[slot];
+      const customSel=!eventPresetMins(am)&&am>0;
+      const picks=[0,15,30,60,120,1440].map(function(m){
+        return '<button class="'+(am===m?"sel":"")+'" onclick="setEventAlertSlot(\''+ev.id+'\','+slot+','+m+')">'
+          +eventAlertLabel(m)+'</button>';
+      }).join("")
+        +'<button class="'+(customSel?"sel":"")+'" onclick="showEvtCust('+ev.n+','+slot+')">Custom</button>'
+        +'<div class="cust" id="eac'+ev.n+'s'+slot+'" style="display:'+(customSel?"flex":"none")+'">'
+        +'<input type="number" id="eai'+ev.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="min"'
+        +' value="'+(am>0&&!eventPresetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
+        +'<button class="b-yellow" onclick="saveEvtCustom(\''+ev.id+'\','+ev.n+','+slot+')">Set</button>'
+        +'</div>';
+      slots+='<div class="priSlot"><div class="slbl">Alert '+(slot+1)+' (before)</div>'
+        +'<div class="alertpick on">'+picks+'</div></div>';
+    }
+    slots+='<button onclick="testEventAlert(\''+ev.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
+    const whereLine=ev.where?('<div class="sub">📍 '+esc(ev.where)+'</div>'):"";
+    const doneBit=ev.status==="done"?' · done':"";
+    return '<div class="item open"><div class="prow">'
+      +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglEvtAlert('+ev.n+')">'
+      +(anyOn?"🔔":"🔕")+'</button>'
+      +'<div class="body"><div class="cat">'+esc(ev.id)
+      +(summary?(' · 🔔 '+summary):"")+doneBit+'</div>'
+      +'<div class="ttl">'+esc(ev.title)+'</div>'
+      +'<div class="sub">🗓️ '+esc(fmtWhen(ev.when))+'</div>'
+      +whereLine+'</div>'
+      +'<div class="acts minirow">'
+      +(ev.status==="open"
+        ?('<button class="mini b-green" onclick="actEvent(\''+ev.id+'\',\'done\')">✅<br>Done</button>')
+        :"")
+      +'<button class="mini b-red" onclick="actEvent(\''+ev.id+'\',\'del\')">🗑<br>Delete</button>'
+      +'</div></div>'
+      +'<div class="priSlots" id="eap'+ev.n+'" onclick="event.stopPropagation()">'+slots+'</div>'
+      +'</div>';
+  }
+  upEl.innerHTML=upcoming.length?upcoming.map(evtCard).join(""):'<p class="empty">No upcoming events 🗓️</p>';
+  pastEl.innerHTML=past.length?past.map(evtCard).join(""):'<p class="note">Empty.</p>';
 }
 
 /* ---------- nav / boot ---------- */
 function go(t){tab=t;
-  for(const s of["inbox","pri","done","set"]){
+  for(const s of["inbox","pri","evt","done","set"]){
     document.getElementById("s-"+s).classList.toggle("on",s===t);
     document.getElementById("n-"+s).classList.toggle("cur",s===t);}
   document.getElementById("hdr").textContent=
-    {inbox:"Inbox",pri:"Priorities",done:"Completed",set:"Settings"}[t];}
+    {inbox:"Inbox",pri:"Priorities",evt:"Events",done:"Completed",set:"Settings"}[t];}
 function msg(m){document.getElementById("setupMsg").textContent=m;}
 function stamp(m){document.getElementById("scanStamp").textContent=m;}
 document.getElementById("rescan").onclick=()=>scan().catch(e=>stamp("Scan failed: "+e.message));
