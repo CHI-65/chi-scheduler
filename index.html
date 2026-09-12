@@ -104,7 +104,12 @@ input[type=datetime-local]{width:100%; font-size:22px; padding:14px;
 .evslot{display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
 .evslot .lbl{font-size:16px; color:var(--dim); min-width:3.2em; font-weight:700;}
 .priSlots{display:none; width:100%; margin-top:10px;}
-.priSlots.on{display:block;}
+.item.open .priSlots.on{display:block;}
+/* Compact cards: expand-only chrome hidden until .open (inbox keeps .itemrow .cat) */
+.item:not(.open) .bell{display:none;}
+.item:not(.open) .movers{display:none;}
+.item:not(.open) .prow .cat{display:none;}
+.item:not(.open) .xwhere{display:none;}
 .priSlot{margin:8px 0; padding-top:6px; border-top:1px solid var(--line);}
 .priSlot:first-child{border-top:none; padding-top:0;}
 .priSlot .slbl{font-size:15px; color:var(--dim); font-weight:700; margin-bottom:6px;}
@@ -204,7 +209,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.14</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.15</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -530,6 +535,12 @@ function card(it,inner){return '<div class="item" id="c'+it.n+'" onclick="tgl('+
   +'</div><div class="acts" onclick="event.stopPropagation()">'+inner+'</div></div></div>';}
 function esc(s){return String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));}
 function tgl(n){document.getElementById("c"+n).classList.toggle("open");}
+function tglEvt(n){document.getElementById("ec"+n).classList.toggle("open");}
+function priSub(it){
+  if(it.when){try{const d=new Date(it.when); if(!isNaN(d)) return d.toLocaleString();}catch(e){}}
+  if(it.added){try{const d=new Date(it.added); if(!isNaN(d)) return d.toLocaleString();}catch(e){}}
+  return it.from?("from "+it.from):"";
+}
 function render(){
   const ib=board.items.filter(i=>i.status==="inbox");
   document.getElementById("inboxList").innerHTML=ib.length?ib.map(it=>card(it,
@@ -563,17 +574,20 @@ function render(){
         +'<div class="alertpick on">'+picks+'</div></div>';
     }
     slotsHtml+='<button onclick="testItemAlert(\''+it.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
-    return '<div class="item open"><div class="prow">'
+    const sub=priSub(it);
+    return '<div class="item" id="c'+it.n+'" onclick="tgl('+it.n+')"><div class="prow">'
    +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglAlert('+it.n+')">'
    +(anyOn?"🔔":"🔕")+'</button>'
    +'<div class="body"><div class="cat">'+(ix+1)+' · '+it.id
    +(summary?(' · 🔔 '+summary):"")+'</div>'
-   +'<div class="ttl">'+esc(it.title)+'</div></div>'
-   +'<div class="acts minirow">'
+   +'<div class="ttl">'+esc(it.title)+'</div>'
+   +(sub?('<div class="sub">'+esc(sub)+'</div>'):"")
+   +'</div>'
+   +'<div class="acts minirow" onclick="event.stopPropagation()">'
    +'<button class="mini b-green" onclick="act(\''+it.id+'\',\'doneFromPri\')">✅<br>Done</button>'
    +'<button class="mini b-gray" onclick="act(\''+it.id+'\',\'back\')">📥<br>Inbox</button>'
    +'</div>'
-   +'<div class="movers"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
+   +'<div class="movers" onclick="event.stopPropagation()"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
    +'<button class="dn" onclick="move(\''+it.id+'\',1)">▼</button></div>'
    +'</div>'
    +'<div class="priSlots" id="ap'+it.n+'" onclick="event.stopPropagation()">'+slotsHtml+'</div>'
@@ -591,7 +605,7 @@ function render(){
   const dl2=board.items.filter(i=>i.status==="deleted");
   document.getElementById("delList").innerHTML=dl2.length?dl2.map(it=>{
     const days=Math.max(0,15-Math.floor((Date.now()-new Date(it.deletedAt))/864e5));
-    return '<div class="item open"><div class="itemrow"><div class="body">'
+    return '<div class="item" id="c'+it.n+'" onclick="tgl('+it.n+')"><div class="itemrow"><div class="body">'
       +'<div class="cat">'+it.id+'</div><div class="ttl">'+esc(it.title)+'</div>'
       +'<div class="sub">archives in '+days+' days</div></div>'
       +'<div class="acts" onclick="event.stopPropagation()">'
@@ -862,9 +876,9 @@ function renderEvents(){
         +'<div class="alertpick on">'+picks+'</div></div>';
     }
     slots+='<button onclick="testEventAlert(\''+ev.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
-    const whereLine=ev.where?('<div class="sub">📍 '+esc(ev.where)+'</div>'):"";
+    const whereLine=ev.where?('<div class="sub xwhere">📍 '+esc(ev.where)+'</div>'):"";
     const doneBit=ev.status==="done"?' · done':"";
-    return '<div class="item open"><div class="prow">'
+    return '<div class="item" id="ec'+ev.n+'" onclick="tglEvt('+ev.n+')"><div class="prow">'
       +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglEvtAlert('+ev.n+')">'
       +(anyOn?"🔔":"🔕")+'</button>'
       +'<div class="body"><div class="cat">'+esc(ev.id)
@@ -872,7 +886,7 @@ function renderEvents(){
       +'<div class="ttl">'+esc(ev.title)+'</div>'
       +'<div class="sub">🗓️ '+esc(fmtWhen(ev.when))+'</div>'
       +whereLine+'</div>'
-      +'<div class="acts minirow">'
+      +'<div class="acts minirow" onclick="event.stopPropagation()">'
       +(ev.status==="open"
         ?('<button class="mini b-green" onclick="actEvent(\''+ev.id+'\',\'done\')">✅<br>Done</button>')
         :"")
