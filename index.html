@@ -421,6 +421,16 @@ function presetMins(m){return [0,30,60,180,1440].indexOf(Number(m)||0)>=0;}
 function eventAlertLabel(m){m=Number(m)||0;
   return {0:"Off",15:"15m",30:"30m",60:"1h",120:"2h",1440:"1d"}[m]||(m+"m");}
 function eventPresetMins(m){return [0,15,30,60,120,1440].indexOf(Number(m)||0)>=0;}
+/* Summary line: exact local clock times for when each alert will fire */
+function eventAlertWhenLabel(ev,m){
+  m=Number(m)||0; if(!m) return "Off";
+  const fire=new Date(new Date(ev.when).getTime()-m*60000);
+  const evDay=new Date(ev.when);
+  const sameDay=fire.toDateString()===evDay.toDateString();
+  const tOpts={hour:"numeric",minute:"2-digit"};
+  if(sameDay) return fire.toLocaleTimeString([],tOpts);
+  return fire.toLocaleString([],{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+}
 function tglAlert(n){const el=document.getElementById("ap"+n);
   if(el)el.classList.toggle("on");}
 async function setItemAlertSlot(id,slot,mins){const it=find(id); if(!it)return;
@@ -833,7 +843,7 @@ function renderEvents(){
     normalizeEvent(ev);
     const anyOn=ev.alerts.some(function(a){return a>0;});
     const bellOn=anyOn?" on":"";
-    const summary=ev.alerts.filter(function(a){return a>0;}).map(eventAlertLabel).join(" · ");
+    const summary=ev.alerts.filter(function(a){return a>0;}).map(function(a){return eventAlertWhenLabel(ev,a);}).join(" · ");
     let slots="";
     for(let slot=0;slot<3;slot++){
       const am=ev.alerts[slot];
