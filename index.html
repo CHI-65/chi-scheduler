@@ -60,10 +60,23 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .up,.dn{background:#000000; color:#FFFFFF; border:2px solid var(--yellow);
   width:fit-content; min-width:2.2em; min-height:0; height:2.2em; padding:0 8px;
   font-size:18px; border-radius:10px; line-height:1;}
-.prow{display:flex; gap:10px; align-items:center;}
-.prow .body{flex:1; min-width:0;}
+.prow{display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;}
+.prow .body{flex:1 1 12em; min-width:0;}
 .prow .acts{flex:0 0 auto;}
 .prow .movers{display:flex; flex-direction:column; gap:6px; flex:0 0 auto;}
+/* Portrait / narrow: actions under title so Done/Delete never overlap */
+@media (max-width:640px){
+  .prow .acts{flex:1 1 100%; order:20; margin-top:8px;}
+  .prow .acts.minirow,.prow .minirow{justify-content:flex-start; flex-wrap:wrap;}
+  .prow .movers{order:21; flex-direction:row; align-items:center;}
+  .itemrow{flex-wrap:wrap; align-items:flex-start;}
+  .itemrow .acts{flex:1 1 100%; margin-top:8px;}
+  .itemrow .acts .minirow{justify-content:flex-start; flex-wrap:wrap;}
+  .mini{font-size:22px; height:4.6em; padding:0 12px;}
+  .item .ttl{font-size:24px;}
+  .item .cat{font-size:18px; letter-spacing:0.5px;}
+  .item .sub{font-size:17px;}
+}
 .bell{display:inline-flex; align-items:center; justify-content:center;
   width:fit-content; min-width:2.4em; height:2.4em; padding:0 8px; margin:0 4px 0 0;
   font-size:28px; background:#000; color:#fff; border:2px solid var(--line);
@@ -191,7 +204,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.13</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.14</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
