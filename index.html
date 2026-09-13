@@ -89,8 +89,11 @@ button{font-family:inherit; border:none; cursor:pointer;}
 .alertpick button.sel{border-color:var(--yellow); color:var(--yellow);}
 .alertpick .cust{display:flex; gap:8px; width:100%; align-items:center; flex-wrap:wrap;}
 .alertpick input[type=number],#freqCustom{
-  width:7em; font-size:18px; padding:10px 12px; border-radius:12px;
+  width:5.5em; font-size:18px; padding:10px 12px; border-radius:12px;
   border:2px solid var(--line); background:var(--card); color:var(--ink);}
+.alertpick .cust .unit{flex:0 0 auto; min-height:2.6em; font-size:16px; font-weight:800;
+  border-radius:12px; padding:8px 14px; background:#000; color:#fff; border:2px solid var(--line);}
+.alertpick .cust .unit.sel{border-color:var(--yellow); color:var(--yellow);}
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--bg);
   border-top:2px solid var(--line); display:flex;
   padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
@@ -209,7 +212,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.15</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.16</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -421,11 +424,41 @@ async function act(id,what){const it=find(id); if(!it)return;
     it.status="inbox"; it.ord=0; it.skipped=false; delete it.deletedAt;}
   await saveBoard(); render();}
 function alertLabel(m){m=Number(m)||0;
-  return {0:"Off",30:"30m",60:"1h",180:"3h",1440:"Day"}[m]||(m+"m");}
+  const p={0:"Off",30:"30m",60:"1h",180:"3h",1440:"Day"};
+  if(p[m]!==undefined) return p[m];
+  if(m%1440===0) return (m/1440)+"d";
+  if(m%60===0) return (m/60)+"h";
+  return m+"m";}
 function presetMins(m){return [0,30,60,180,1440].indexOf(Number(m)||0)>=0;}
 function eventAlertLabel(m){m=Number(m)||0;
-  return {0:"Off",15:"15m",30:"30m",60:"1h",120:"2h",1440:"1d"}[m]||(m+"m");}
+  const p={0:"Off",15:"15m",30:"30m",60:"1h",120:"2h",1440:"1d"};
+  if(p[m]!==undefined) return p[m];
+  if(m%1440===0) return (m/1440)+"d";
+  if(m%60===0) return (m/60)+"h";
+  return m+"m";}
 function eventPresetMins(m){return [0,15,30,60,120,1440].indexOf(Number(m)||0)>=0;}
+/* Custom interval: number + unit ↔ total minutes */
+function minsToUnitParts(mins){
+  mins=Number(mins)||0;
+  if(mins>0 && mins%1440===0) return {num:mins/1440, unit:"day"};
+  if(mins>0 && mins%60===0) return {num:mins/60, unit:"hr"};
+  return {num:mins>0?mins:"", unit:"min"};}
+function unitPartsToMins(num,unit){
+  num=Math.floor(Number(num)||0); if(num<1) return 0;
+  if(unit==="day") return num*1440;
+  if(unit==="hr") return num*60;
+  return num;}
+function setCustUnit(custId,unit){
+  const w=document.getElementById(custId); if(!w)return;
+  w.setAttribute("data-unit",unit);
+  w.querySelectorAll(".unit").forEach(function(b){
+    b.classList.toggle("sel", b.getAttribute("data-u")===unit);
+  });}
+function custUnitHtml(custId,unit){
+  return ["min","hr","day"].map(function(u){
+    return '<button type="button" class="unit'+(unit===u?" sel":"")+'" data-u="'+u+'"'
+      +' onclick="event.stopPropagation();setCustUnit(\''+custId+'\',\''+u+'\')">'+u+'</button>';
+  }).join("");}
 /* Summary line: exact local clock times for when each alert will fire */
 function eventAlertWhenLabel(ev,m){
   m=Number(m)||0; if(!m) return "Off";
@@ -447,8 +480,10 @@ function showCust(n,slot){const w=document.getElementById("ac"+n+"s"+slot);
   if(w)w.style.display=w.style.display==="flex"?"none":"flex";
   const i=document.getElementById("ai"+n+"s"+slot); if(i){i.focus(); i.select&&i.select();}}
 async function saveItemCustom(id,n,slot){const i=document.getElementById("ai"+n+"s"+slot);
+  const w=document.getElementById("ac"+n+"s"+slot);
+  const unit=(w&&w.getAttribute("data-unit"))||"min";
   const v=Number(i&&i.value); if(!v||v<1){i&&i.focus(); return;}
-  await setItemAlertSlot(id,slot,Math.floor(v));}
+  await setItemAlertSlot(id,slot,unitPartsToMins(v,unit));}
 function testItemAlert(id){const it=find(id); if(it) showAlert(it);}
 function findEvent(id){return (board.events||[]).find(function(e){return e.id===id;});}
 function showAddEvt(){document.getElementById("addEvtBox").style.display="block";
@@ -494,8 +529,10 @@ function showEvtCust(n,slot){
 }
 async function saveEvtCustom(id,n,slot){
   const i=document.getElementById("eai"+n+"s"+slot);
+  const w=document.getElementById("eac"+n+"s"+slot);
+  const unit=(w&&w.getAttribute("data-unit"))||"min";
   const v=Number(i&&i.value); if(!v||v<1){i&&i.focus(); return;}
-  await setEventAlertSlot(id,slot,Math.floor(v));
+  await setEventAlertSlot(id,slot,unitPartsToMins(v,unit));
 }
 function tglEvtAlert(n){const el=document.getElementById("eap"+n);
   if(el)el.classList.toggle("on");}
@@ -565,11 +602,16 @@ function render(){
           +alertLabel(m)+'</button>';
       }).join("")
         +'<button class="'+(customSel?"sel":"")+'" onclick="showCust('+it.n+','+slot+')">Custom</button>'
-        +'<div class="cust" id="ac'+it.n+'s'+slot+'" style="display:'+(customSel?"flex":"none")+'">'
-        +'<input type="number" id="ai'+it.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="min"'
-        +' value="'+(am>0&&!presetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
-        +'<button class="b-yellow" onclick="saveItemCustom(\''+it.id+'\','+it.n+','+slot+')">Set</button>'
-        +'</div>';
+        +(function(){
+          const parts=minsToUnitParts(customSel?am:0);
+          const cid='ac'+it.n+'s'+slot;
+          return '<div class="cust" id="'+cid+'" data-unit="'+parts.unit+'" style="display:'+(customSel?"flex":"none")+'">'
+            +'<input type="number" id="ai'+it.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="#"'
+            +' value="'+(customSel?parts.num:"")+'" onclick="event.stopPropagation()">'
+            +custUnitHtml(cid,parts.unit)
+            +'<button class="b-yellow" onclick="saveItemCustom(\''+it.id+'\','+it.n+','+slot+')">Set</button>'
+            +'</div>';
+        })();
       slotsHtml+='<div class="priSlot"><div class="slbl">Reminder '+(slot+1)+'</div>'
         +'<div class="alertpick on">'+picks+'</div></div>';
     }
@@ -867,11 +909,16 @@ function renderEvents(){
           +eventAlertLabel(m)+'</button>';
       }).join("")
         +'<button class="'+(customSel?"sel":"")+'" onclick="showEvtCust('+ev.n+','+slot+')">Custom</button>'
-        +'<div class="cust" id="eac'+ev.n+'s'+slot+'" style="display:'+(customSel?"flex":"none")+'">'
-        +'<input type="number" id="eai'+ev.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="min"'
-        +' value="'+(am>0&&!eventPresetMins(am)?am:"")+'" onclick="event.stopPropagation()">'
-        +'<button class="b-yellow" onclick="saveEvtCustom(\''+ev.id+'\','+ev.n+','+slot+')">Set</button>'
-        +'</div>';
+        +(function(){
+          const parts=minsToUnitParts(customSel?am:0);
+          const cid='eac'+ev.n+'s'+slot;
+          return '<div class="cust" id="'+cid+'" data-unit="'+parts.unit+'" style="display:'+(customSel?"flex":"none")+'">'
+            +'<input type="number" id="eai'+ev.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="#"'
+            +' value="'+(customSel?parts.num:"")+'" onclick="event.stopPropagation()">'
+            +custUnitHtml(cid,parts.unit)
+            +'<button class="b-yellow" onclick="saveEvtCustom(\''+ev.id+'\','+ev.n+','+slot+')">Set</button>'
+            +'</div>';
+        })();
       slots+='<div class="priSlot"><div class="slbl">Alert '+(slot+1)+' (before)</div>'
         +'<div class="alertpick on">'+picks+'</div></div>';
     }
