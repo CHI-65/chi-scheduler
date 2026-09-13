@@ -113,10 +113,13 @@ input[type=datetime-local]{width:100%; font-size:22px; padding:14px;
 .item:not(.open) .movers{display:none;}
 .item:not(.open) .prow .cat{display:none;}
 .item:not(.open) .xwhere{display:none;}
+.item:not(.open) .xrepeat{display:none;}
 .priSlot{margin:8px 0; padding-top:6px; border-top:1px solid var(--line);}
 .priSlot:first-child{border-top:none; padding-top:0;}
 .priSlot .slbl{font-size:15px; color:var(--dim); font-weight:700; margin-bottom:6px;}
 nav button.cur{color:var(--yellow); background:var(--card);}
+.reppick button{min-height:3em; font-size:18px; font-weight:800; padding:10px 18px;}
+
 .banner{background:var(--yellow); color:#0B0B0B; font-size:24px; font-weight:800;
   padding:16px; border-radius:14px; margin:12px 0; display:none; position:relative;}
 .banner.on{display:block; animation:pulse 1s ease-in-out infinite;}
@@ -173,6 +176,14 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
     <input type="text" id="evtTitle" placeholder="Event title">
     <input type="datetime-local" id="evtWhen">
     <input type="text" id="evtWhere" placeholder="Where (optional)">
+    <div class="priSlot" style="display:block;margin-top:8px;">
+      <div class="slbl">Repeat</div>
+      <div class="alertpick on reppick" id="addEvtRepeat">
+        <button type="button" class="sel" data-rep="off" onclick="setAddRepeat('off')">Off</button>
+        <button type="button" data-rep="daily" onclick="setAddRepeat('daily')">Daily</button>
+        <button type="button" data-rep="weekly" onclick="setAddRepeat('weekly')">Weekly</button>
+      </div>
+    </div>
     <div class="rowbtns">
       <button class="b-green" onclick="addEvent()">Save</button>
       <button class="b-gray" onclick="hideAddEvt()">Cancel</button>
@@ -212,7 +223,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.16</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.17</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -346,6 +357,24 @@ function normalizeEvent(ev){
   ev.alerts=ev.alerts.slice(0,3).map(function(m){return Number(m)||0;});
   if(!Array.isArray(ev.fired)) ev.fired=[];
   if(!ev.status) ev.status="open";
+  if(ev.repeat!=="daily" && ev.repeat!=="weekly") ev.repeat="off";
+}
+function nextOccurrence(ev, fromMs){
+  if(fromMs==null) fromMs=Date.now();
+  const start=new Date(ev.when);
+  if(isNaN(start.getTime())) return null;
+  const rep=ev.repeat==="daily"||ev.repeat==="weekly"?ev.repeat:"off";
+  if(rep==="off") return start;
+  const step=rep==="weekly"?7:1;
+  const d=new Date(start.getTime());
+  for(let i=0;i<20000 && d.getTime()<fromMs;i++){
+    d.setDate(d.getDate()+step);
+  }
+  return d;
+}
+function eventFiredKey(occ, slot){
+  const iso=(occ instanceof Date)?occ.toISOString():String(occ);
+  return iso+"-"+slot;
 }
 async function loadBoard(){const t=await dl(BOARD);
   board=t?JSON.parse(t):freshBoard();
@@ -462,8 +491,9 @@ function custUnitHtml(custId,unit){
 /* Summary line: exact local clock times for when each alert will fire */
 function eventAlertWhenLabel(ev,m){
   m=Number(m)||0; if(!m) return "Off";
-  const fire=new Date(new Date(ev.when).getTime()-m*60000);
-  const evDay=new Date(ev.when);
+  const occ=nextOccurrence(ev)||new Date(ev.when);
+  const fire=new Date(occ.getTime()-m*60000);
+  const evDay=occ;
   const sameDay=fire.toDateString()===evDay.toDateString();
   const tOpts={hour:"numeric",minute:"2-digit"};
   if(sameDay) return fire.toLocaleTimeString([],tOpts);
@@ -486,9 +516,19 @@ async function saveItemCustom(id,n,slot){const i=document.getElementById("ai"+n+
   await setItemAlertSlot(id,slot,unitPartsToMins(v,unit));}
 function testItemAlert(id){const it=find(id); if(it) showAlert(it);}
 function findEvent(id){return (board.events||[]).find(function(e){return e.id===id;});}
+let addEvtRepeat="off";
+function setAddRepeat(r){
+  addEvtRepeat=(r==="daily"||r==="weekly")?r:"off";
+  const box=document.getElementById("addEvtRepeat");
+  if(!box)return;
+  box.querySelectorAll("button[data-rep]").forEach(function(b){
+    b.classList.toggle("sel", b.getAttribute("data-rep")===addEvtRepeat);
+  });
+}
 function showAddEvt(){document.getElementById("addEvtBox").style.display="block";
   document.getElementById("evtTitle").focus();}
-function hideAddEvt(){document.getElementById("addEvtBox").style.display="none";}
+function hideAddEvt(){document.getElementById("addEvtBox").style.display="none";
+  setAddRepeat("off");}
 async function addEvent(){
   const title=document.getElementById("evtTitle").value.trim();
   const whenEl=document.getElementById("evtWhen").value;
@@ -499,6 +539,7 @@ async function addEvent(){
   if(!board.nextEventNum) board.nextEventNum=1;
   const ev={id:evtNum(board.nextEventNum), n:board.nextEventNum,
     title:title, when:when, where:where||"", alerts:[0,0,0], fired:[], status:"open",
+    repeat:addEvtRepeat==="daily"||addEvtRepeat==="weekly"?addEvtRepeat:"off",
     added:new Date().toISOString()};
   board.nextEventNum++;
   board.events.push(ev);
@@ -506,6 +547,12 @@ async function addEvent(){
   document.getElementById("evtWhen").value="";
   document.getElementById("evtWhere").value="";
   hideAddEvt();
+  await saveBoard(); render();
+}
+async function setEventRepeat(id,rep){
+  const ev=findEvent(id); if(!ev)return;
+  normalizeEvent(ev);
+  ev.repeat=(rep==="daily"||rep==="weekly")?rep:"off";
   await saveBoard(); render();
 }
 async function actEvent(id,what){
@@ -518,8 +565,11 @@ async function setEventAlertSlot(id,slot,mins){
   const ev=findEvent(id); if(!ev)return;
   normalizeEvent(ev);
   ev.alerts[slot]=Number(mins)||0;
-  // changing alert clears fired for that slot so it can fire again
-  ev.fired=ev.fired.filter(function(x){return x!==slot;});
+  // changing alert clears fired for that slot (legacy numeric + occKey-slot)
+  ev.fired=ev.fired.filter(function(x){
+    const s=String(x);
+    return s!==String(slot) && s.slice(-(String(slot).length+1))!==("-"+slot);
+  });
   await saveBoard(); render();
 }
 function showEvtCust(n,slot){
@@ -815,11 +865,12 @@ function showAlert(it){
   startAlarmSound();
   pingSystemNotif(line);
 }
-function showEventAlert(ev){
+function showEventAlert(ev, occ){
   unlockAudio();
   const b=document.getElementById("alertBanner");
   const tx=document.getElementById("alertText");
-  const line="📅 EVENT — "+(ev&&ev.title?ev.title:"(event)")+" — "+fmtWhen(ev&&ev.when);
+  const whenSrc=occ?(occ instanceof Date?occ.toISOString():occ):(ev&&ev.when);
+  const line="📅 EVENT — "+(ev&&ev.title?ev.title:"(event)")+" — "+fmtWhen(whenSrc);
   tx.textContent=line;
   b.style.display="block";
   b.classList.add("on");
@@ -862,23 +913,26 @@ function checkEventReminders(){
   for(const ev of board.events){
     normalizeEvent(ev);
     if(ev.status!=="open") continue;
-    const whenMs=new Date(ev.when).getTime();
+    const occ=nextOccurrence(ev, now);
+    if(!occ) continue;
+    const whenMs=occ.getTime();
     if(isNaN(whenMs)) continue;
     for(let slot=0;slot<3;slot++){
       const mins=Number(ev.alerts[slot])||0;
       if(!mins) continue;
-      if(ev.fired.indexOf(slot)>=0) continue;
+      const key=eventFiredKey(occ, slot);
+      if(ev.fired.indexOf(key)>=0) continue;
       const fireAt=whenMs-mins*60000;
       if(now<fireAt) continue;
-      // Skip silent backlog older than 2 minutes; mark fired so each slot still fires once
+      // Skip silent backlog older than 2 minutes; mark fired so each slot still fires once per occurrence
       if(now-fireAt>120000){
-        ev.fired.push(slot);
+        ev.fired.push(key);
         changed=true;
         continue;
       }
-      ev.fired.push(slot);
+      ev.fired.push(key);
       changed=true;
-      showEventAlert(ev);
+      showEventAlert(ev, occ);
     }
   }
   if(changed) saveBoard();
@@ -889,10 +943,21 @@ function renderEvents(){
   if(!upEl||!pastEl) return;
   const now=Date.now();
   const open=(board.events||[]).filter(function(e){return e.status==="open";});
-  const upcoming=open.filter(function(e){return new Date(e.when).getTime()>=now;})
-    .sort(function(a,b){return new Date(a.when)-new Date(b.when);});
-  const past=open.filter(function(e){return new Date(e.when).getTime()<now;})
-    .sort(function(a,b){return new Date(b.when)-new Date(a.when);})
+  function isRepeating(e){return e.repeat==="daily"||e.repeat==="weekly";}
+  const upcoming=open.filter(function(e){
+    const occ=nextOccurrence(e, now);
+    if(!occ) return false;
+    if(isRepeating(e)) return true;
+    return occ.getTime()>=now;
+  }).sort(function(a,b){
+    const ao=nextOccurrence(a,now), bo=nextOccurrence(b,now);
+    return (ao?ao.getTime():0)-(bo?bo.getTime():0);
+  });
+  const past=open.filter(function(e){
+    if(isRepeating(e)) return false;
+    const occ=nextOccurrence(e, now);
+    return !occ || occ.getTime()<now;
+  }).sort(function(a,b){return new Date(b.when)-new Date(a.when);})
     .concat((board.events||[]).filter(function(e){return e.status==="done";})
       .sort(function(a,b){return new Date(b.when)-new Date(a.when);}));
   function evtCard(ev){
@@ -900,6 +965,15 @@ function renderEvents(){
     const anyOn=ev.alerts.some(function(a){return a>0;});
     const bellOn=anyOn?" on":"";
     const summary=ev.alerts.filter(function(a){return a>0;}).map(function(a){return eventAlertWhenLabel(ev,a);}).join(" · ");
+    const occ=ev.status==="open"?nextOccurrence(ev, now):new Date(ev.when);
+    const whenShow=(occ&&!isNaN(occ.getTime()))?fmtWhen(occ.toISOString()):fmtWhen(ev.when);
+    const rep=ev.repeat==="daily"||ev.repeat==="weekly"?ev.repeat:"off";
+    const repeatRow='<div class="xrepeat priSlot" onclick="event.stopPropagation()"><div class="slbl">Repeat</div>'
+      +'<div class="alertpick on reppick">'
+      +'<button class="'+(rep==="off"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'off\')">Off</button>'
+      +'<button class="'+(rep==="daily"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'daily\')">Daily</button>'
+      +'<button class="'+(rep==="weekly"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'weekly\')">Weekly</button>'
+      +'</div></div>';
     let slots="";
     for(let slot=0;slot<3;slot++){
       const am=ev.alerts[slot];
@@ -931,7 +1005,7 @@ function renderEvents(){
       +'<div class="body"><div class="cat">'+esc(ev.id)
       +(summary?(' · 🔔 '+summary):"")+doneBit+'</div>'
       +'<div class="ttl">'+esc(ev.title)+'</div>'
-      +'<div class="sub">🗓️ '+esc(fmtWhen(ev.when))+'</div>'
+      +'<div class="sub">🗓️ '+esc(whenShow)+'</div>'
       +whereLine+'</div>'
       +'<div class="acts minirow" onclick="event.stopPropagation()">'
       +(ev.status==="open"
@@ -939,6 +1013,7 @@ function renderEvents(){
         :"")
       +'<button class="mini b-red" onclick="actEvent(\''+ev.id+'\',\'del\')">🗑<br>Delete</button>'
       +'</div></div>'
+      +repeatRow
       +'<div class="priSlots" id="eap'+ev.n+'" onclick="event.stopPropagation()">'+slots+'</div>'
       +'</div>';
   }
