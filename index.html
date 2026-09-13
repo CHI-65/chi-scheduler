@@ -223,7 +223,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.18</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.19</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -350,6 +350,8 @@ function normalizeItemAlerts(it){
   while(it.alerts.length<3) it.alerts.push(0);
   it.alerts=it.alerts.slice(0,3).map(function(m){return Number(m)||0;});
   it.alertMins=it.alerts[0]||0;
+  if(it.repeat!=="daily" && it.repeat!=="weekly") it.repeat="off";
+  if(!Array.isArray(it.fired)) it.fired=[];
 }
 function normalizeEvent(ev){
   if(!Array.isArray(ev.alerts)) ev.alerts=[0,0,0];
@@ -505,7 +507,22 @@ async function setItemAlertSlot(id,slot,mins){const it=find(id); if(!it)return;
   normalizeItemAlerts(it);
   it.alerts[slot]=Number(mins)||0;
   it.alertMins=it.alerts[0]||0;
+  // changing alert clears fired for that slot (legacy numeric + occKey-slot)
+  it.fired=it.fired.filter(function(x){
+    const s=String(x);
+    return s!==String(slot) && s.slice(-(String(slot).length+1))!==("-"+slot);
+  });
   await saveBoard(); render();}
+async function setItemRepeat(id,rep){
+  const it=find(id); if(!it)return;
+  normalizeItemAlerts(it);
+  const r=(rep==="daily"||rep==="weekly")?rep:"off";
+  it.repeat=r;
+  if((r==="daily"||r==="weekly") && !it.when){
+    it.when=new Date().toISOString();
+  }
+  await saveBoard(); render();
+}
 function showCust(n,slot){const w=document.getElementById("ac"+n+"s"+slot);
   if(w)w.style.display=w.style.display==="flex"?"none":"flex";
   const i=document.getElementById("ai"+n+"s"+slot); if(i){i.focus(); i.select&&i.select();}}
@@ -624,6 +641,11 @@ function esc(s){return String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&"
 function tgl(n){document.getElementById("c"+n).classList.toggle("open");}
 function tglEvt(n){document.getElementById("ec"+n).classList.toggle("open");}
 function priSub(it){
+  normalizeItemAlerts(it);
+  if(it.repeat==="daily"||it.repeat==="weekly"){
+    const occ=nextOccurrence(it, Date.now());
+    if(occ&&!isNaN(occ.getTime())) return "🗓️ "+occ.toLocaleString();
+  }
   if(it.when){try{const d=new Date(it.when); if(!isNaN(d)) return d.toLocaleString();}catch(e){}}
   if(it.added){try{const d=new Date(it.added); if(!isNaN(d)) return d.toLocaleString();}catch(e){}}
   return it.from?("from "+it.from):"";
@@ -682,6 +704,15 @@ function render(){
    +'<div class="movers" onclick="event.stopPropagation()"><button class="up" onclick="move(\''+it.id+'\',-1)">▲</button>'
    +'<button class="dn" onclick="move(\''+it.id+'\',1)">▼</button></div>'
    +'</div>'
+   +(function(){
+      const rep=it.repeat==="daily"||it.repeat==="weekly"?it.repeat:"off";
+      return '<div class="xrepeat priSlot" onclick="event.stopPropagation()"><div class="slbl">Repeat</div>'
+        +'<div class="alertpick on reppick">'
+        +'<button class="'+(rep==="off"?"sel":"")+'" onclick="setItemRepeat(\''+it.id+'\',\'off\')">Off</button>'
+        +'<button class="'+(rep==="daily"?"sel":"")+'" onclick="setItemRepeat(\''+it.id+'\',\'daily\')">Daily</button>'
+        +'<button class="'+(rep==="weekly"?"sel":"")+'" onclick="setItemRepeat(\''+it.id+'\',\'weekly\')">Weekly</button>'
+        +'</div></div>';
+    })()
    +'<div class="priSlots" id="ap'+it.n+'" onclick="event.stopPropagation()">'+slotsHtml+'</div>'
    +'</div>';
   }).join(""):'<p class="empty">No priorities 📅</p>';
@@ -893,6 +924,7 @@ function armReminder(){
   for(const it of (board&&board.items)||[]){
     if(it.status!=="priority") continue;
     normalizeItemAlerts(it);
+    if(it.repeat==="daily"||it.repeat==="weekly") continue; // occurrence-based via poll
     for(let s=0;s<3;s++){
       const am=Number(it.alerts[s])||0;
       if(!am) continue;
@@ -907,33 +939,45 @@ function armEventReminders(){
   eventRemTimer=setInterval(checkEventReminders, 15000);
 }
 function checkEventReminders(){
-  if(!board||!board.events) return;
+  if(!board) return;
   let changed=false;
   const now=Date.now();
-  for(const ev of board.events){
-    normalizeEvent(ev);
-    if(ev.status!=="open") continue;
-    const occ=nextOccurrence(ev, now);
-    if(!occ) continue;
+  function fireOcc(obj, occ, showFn){
     const whenMs=occ.getTime();
-    if(isNaN(whenMs)) continue;
+    if(isNaN(whenMs)) return;
+    if(!Array.isArray(obj.fired)) obj.fired=[];
     for(let slot=0;slot<3;slot++){
-      const mins=Number(ev.alerts[slot])||0;
+      const mins=Number(obj.alerts[slot])||0;
       if(!mins) continue;
       const key=eventFiredKey(occ, slot);
-      if(ev.fired.indexOf(key)>=0) continue;
+      if(obj.fired.indexOf(key)>=0) continue;
       const fireAt=whenMs-mins*60000;
       if(now<fireAt) continue;
       // Skip silent backlog older than 2 minutes; mark fired so each slot still fires once per occurrence
       if(now-fireAt>120000){
-        ev.fired.push(key);
+        obj.fired.push(key);
         changed=true;
         continue;
       }
-      ev.fired.push(key);
+      obj.fired.push(key);
       changed=true;
-      showEventAlert(ev, occ);
+      showFn(obj, occ);
     }
+  }
+  for(const ev of (board.events||[])){
+    normalizeEvent(ev);
+    if(ev.status!=="open") continue;
+    const occ=nextOccurrence(ev, now);
+    if(!occ) continue;
+    fireOcc(ev, occ, showEventAlert);
+  }
+  for(const it of (board.items||[])){
+    normalizeItemAlerts(it);
+    if(it.status!=="priority") continue;
+    if(it.repeat!=="daily" && it.repeat!=="weekly") continue;
+    const occ=nextOccurrence(it, now);
+    if(!occ) continue;
+    fireOcc(it, occ, function(item){ showAlert(item); });
   }
   if(changed) saveBoard();
 }
