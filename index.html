@@ -145,6 +145,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   letter-spacing:0.4px; vertical-align:middle; margin-left:6px;}
 .jobStatus{color:var(--dim); font-size:18px; font-weight:700; margin-top:4px;}
 .item.needsYou .jobStatus{color:var(--yellow);}
+.jobRef{/* reuse .cat: yellow bold ref above job title */}
 </style>
 </head>
 <body>
@@ -238,7 +239,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.20</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.21</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -1048,8 +1049,10 @@ function renderJobs(){
         ?('<div class="sub jobDetail">Updated '+esc(fmtWhen(j.updated))+'</div>')
         :"";
       const owner=j.owner?('<div class="sub jobDetail">Owner: '+esc(j.owner)+'</div>'):"";
+      const refDisp=String((j.ref!=null&&String(j.ref).trim()!=="")?j.ref:(j.id||("job-"+ix)));
       return '<div class="item'+(need?" needsYou":"")+'" id="jc'+safeId+'" onclick="tglJob(\''+safeId+'\')">'
-        +'<div class="body"><div class="ttl">'+esc(j.title||"(untitled)")+chip+'</div>'
+        +'<div class="body"><div class="cat jobRef">'+esc(refDisp)+'</div>'
+        +'<div class="ttl">'+esc(j.title||"(untitled)")+chip+'</div>'
         +'<div class="jobStatus">'+esc(jobStatusLabel(j.status))+'</div>'
         +needLine+notes+owner+upd
         +'</div></div>';

@@ -3,6 +3,7 @@
   "jobs": [
     {
       "id": "job-001",
+      "ref": "📋-0001",
       "title": "Approve vendor quote for fleet radios",
       "status": "waiting-cal",
       "needsCal": true,
@@ -13,6 +14,7 @@
     },
     {
       "id": "job-002",
+      "ref": "📋-0002",
       "title": "Schedule Q4 board dry-run",
       "status": "open",
       "needsCal": false,
@@ -23,6 +25,7 @@
     },
     {
       "id": "job-003",
+      "ref": "📋-0003",
       "title": "Dropbox folder cleanup",
       "status": "in-progress",
       "needsCal": false,
@@ -33,6 +36,7 @@
     },
     {
       "id": "job-004",
+      "ref": "📋-0004",
       "title": "Blocked on API key renewal",
       "status": "blocked",
       "needsCal": true,
