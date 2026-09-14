@@ -1,0 +1,45 @@
+{
+  "updated": "2026-09-14T08:00:00Z",
+  "jobs": [
+    {
+      "id": "job-001",
+      "title": "Approve vendor quote for fleet radios",
+      "status": "waiting-cal",
+      "needsCal": true,
+      "needsFromCal": "Reply yes/no on the $2.4k quote in Slack #ops",
+      "notes": "CoS will place order once Cal confirms.",
+      "owner": "CoS",
+      "updated": "2026-09-14T07:55:00Z"
+    },
+    {
+      "id": "job-002",
+      "title": "Schedule Q4 board dry-run",
+      "status": "open",
+      "needsCal": false,
+      "needsFromCal": "",
+      "notes": "Gathering availability; no Cal action yet.",
+      "owner": "CoS",
+      "updated": "2026-09-13T18:00:00Z"
+    },
+    {
+      "id": "job-003",
+      "title": "Dropbox folder cleanup",
+      "status": "in-progress",
+      "needsCal": false,
+      "needsFromCal": "",
+      "notes": "Archiving old inbox files.",
+      "owner": "CoS",
+      "updated": "2026-09-12T12:00:00Z"
+    },
+    {
+      "id": "job-004",
+      "title": "Blocked on API key renewal",
+      "status": "blocked",
+      "needsCal": true,
+      "needsFromCal": "Forward the provider renewal email to CoS",
+      "notes": "Cannot proceed until key is renewed.",
+      "owner": "CoS",
+      "updated": "2026-09-11T09:30:00Z"
+    }
+  ]
+}
