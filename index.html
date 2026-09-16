@@ -239,7 +239,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.21</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.22</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -248,7 +248,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 <nav>
   <button id="n-inbox" onclick="go('inbox')"><span class="ico">📥</span>Inbox</button>
   <button id="n-pri" onclick="go('pri')"><span class="ico">📅</span>Priorities</button>
-  <button id="n-evt" onclick="go('evt')"><span class="ico">🗓️</span>Events</button>
+  <button id="n-evt" onclick="go('evt')"><span class="ico">🗓️</span>Schedule</button>
   <button id="n-jobs" onclick="go('jobs')"><span class="ico">📋</span>Jobs</button>
   <button id="n-done" onclick="go('done')"><span class="ico">✅</span>Done</button>
   <button id="n-set" onclick="go('set')"><span class="ico">⚙️</span>Settings</button>
@@ -1154,7 +1154,7 @@ function go(t){tab=t;
     document.getElementById("s-"+s).classList.toggle("on",s===t);
     document.getElementById("n-"+s).classList.toggle("cur",s===t);}
   document.getElementById("hdr").textContent=
-    {inbox:"Inbox",pri:"Priorities",evt:"Events",jobs:"Jobs",done:"Completed",set:"Settings"}[t];}
+    {inbox:"Inbox",pri:"Priorities",evt:"Schedule",jobs:"Jobs",done:"Completed",set:"Settings"}[t];}
 function msg(m){document.getElementById("setupMsg").textContent=m;}
 function stamp(m){document.getElementById("scanStamp").textContent=m;}
 document.getElementById("rescan").onclick=()=>scan().catch(e=>stamp("Scan failed: "+e.message));
