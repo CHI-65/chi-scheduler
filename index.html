@@ -291,7 +291,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.24</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.25</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -313,8 +313,16 @@ const DONE=ROOT+"/calendar-inbox-done";
 const ARCH=ROOT+"/calendar-archive";
 const BOARD=ROOT+"/calendar-board.json";
 const JOBS=ROOT+"/calendar-jobs.json";
-let board=null, jobsData={updated:"",jobs:[]}, tab="evt", remTimer=null, itemAlertTimers=[], eventRemTimer=null;
+let board=null, jobsData={updated:"",jobs:[]}, remTimer=null, itemAlertTimers=[], eventRemTimer=null;
+let tab=(function(){
+  try{
+    const v=localStorage.getItem(TAB_KEY);
+    if(v==="inbox"||v==="pri"||v==="evt"||v==="jobs"||v==="done"||v==="set") return v;
+  }catch(e){}
+  return "evt";
+})();
 const SCHED_VIEW_KEY="chi-scheduler:scheduleView";
+const TAB_KEY="chi-scheduler:tab";
 let scheduleView=(function(){try{return localStorage.getItem(SCHED_VIEW_KEY)==="calendar"?"calendar":"list";}catch(e){return"list";}})();
 let calCursor=new Date();
 let calSelected=null;
@@ -503,7 +511,8 @@ async function scan(){
   }
   if(fresh.length) await saveBoard();
   render();
-  stamp(fresh.length?("Inbox ready · "+fresh.length):"Last scan "+new Date().toLocaleTimeString());
+  go(tab||"evt");
+  stamp(fresh.length?("Ready · "+fresh.length+" new"):"Last scan "+new Date().toLocaleTimeString());
   const fileAway=later.concat(fresh);
   for(var i=0;i<fileAway.length;i++){
     const f=fileAway[i];
@@ -522,6 +531,7 @@ async function scan(){
   board.items=board.items.filter(i=>i.status!=="archived");
   await saveBoard();
   render();
+  go(tab||"evt");
   stamp("Last scan "+new Date().toLocaleTimeString());
 }
 
@@ -1354,6 +1364,7 @@ function renderEvents(){
 
 /* ---------- nav / boot ---------- */
 function go(t){tab=t;
+  try{localStorage.setItem(TAB_KEY, tab);}catch(e){}
   for(const s of["inbox","pri","evt","jobs","done","set"]){
     document.getElementById("s-"+s).classList.toggle("on",s===t);
     document.getElementById("n-"+s).classList.toggle("cur",s===t);}
@@ -1382,7 +1393,7 @@ if("serviceWorker" in navigator){
   if(code)await finishAuth(code);
   if(!tokens()){document.getElementById("s-setup").classList.add("on");
     document.querySelector("nav").style.display="none"; return;}
-  go("evt");
+  go(tab||"evt");
   try{await scan();}catch(e){stamp("Scan failed: "+e.message);}
 })();
 </script>
