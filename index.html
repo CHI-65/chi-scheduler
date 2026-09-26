@@ -146,10 +146,48 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
 .jobStatus{color:var(--dim); font-size:18px; font-weight:700; margin-top:4px;}
 .item.needsYou .jobStatus{color:var(--yellow);}
 .jobRef{/* reuse .cat: yellow bold ref above job title */}
+
+/* Schedule: one-line title+when, view toggle, month calendar */
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden;flex:0 0 auto;}
+.segBtn{background:#000;color:var(--dim);border:none;border-right:2px solid var(--line);
+  width:2.4em;height:2.2em;padding:0;font-size:18px;line-height:1;display:inline-flex;
+  align-items:center;justify-content:center;}
+.segBtn:last-child{border-right:none;}
+.segBtn.on{color:var(--yellow);background:var(--card);}
+.evHead{display:flex;align-items:baseline;gap:8px 14px;flex-wrap:wrap;margin:6px 0;}
+.evHead .ttl{flex:1 1 10em;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.evHead .when{flex:0 1 auto;font-size:17px;color:var(--dim);white-space:nowrap;margin:0;font-weight:600;}
+@media (max-width:640px){
+  .evHead .when{font-size:15px;}
+}
+.calNav{display:flex;align-items:center;gap:10px;margin:8px 0 12px;}
+.calNav .calTitle{flex:1;text-align:center;font-size:22px;font-weight:800;color:var(--yellow);}
+.calNav button{background:#000;color:#fff;border:2px solid var(--line);border-radius:10px;
+  min-width:2.4em;height:2.2em;font-size:20px;font-weight:800;padding:0 10px;}
+.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:14px;}
+.calDow{text-align:center;font-size:13px;font-weight:800;color:var(--dim);padding:4px 0;letter-spacing:0.3px;}
+.calCell{background:var(--card);border:2px solid var(--line);border-radius:10px;min-height:4.8em;
+  padding:4px 4px 6px;cursor:pointer;display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+.calCell.out{opacity:0.38;}
+.calCell.today{border-color:var(--yellow);}
+.calCell.sel{border-color:var(--green);background:var(--card2);}
+.calCell .dnum{font-size:14px;font-weight:800;color:var(--dim);line-height:1.2;}
+.calCell.today .dnum{color:var(--yellow);}
+.calCell.sel .dnum{color:var(--green);}
+.calDots{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;}
+.calDot{width:7px;height:7px;border-radius:50%;background:var(--yellow);}
+.calEv{font-size:11px;line-height:1.2;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:#000;border-radius:4px;padding:1px 3px;border:1px solid var(--line);max-width:100%;}
+.calDayList h2{margin-top:8px;}
+#evtListWrap.hidden,#evtCalWrap.hidden{display:none;}
 </style>
 </head>
 <body>
 <header><span class="mark">📅</span><h1 id="hdr">Scheduler</h1>
+<div id="schedViewToggle" class="seg" style="display:none" role="group" aria-label="Schedule view">
+  <button type="button" id="svList" class="segBtn on" title="List" aria-pressed="true" onclick="setScheduleView('list')">☰</button>
+  <button type="button" id="svCal" class="segBtn" title="Calendar" aria-pressed="false" onclick="setScheduleView('calendar')">▦</button>
+</div>
 <button id="rescan" class="b-gray" style="width:fit-content;min-height:0;height:2.2em;padding:0 10px;font-size:18px;border-radius:10px;">↻</button>
 </header>
 <main>
@@ -198,10 +236,24 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
       <button class="b-gray" onclick="hideAddEvt()">Cancel</button>
     </div>
   </div>
-  <h2>Upcoming</h2>
-  <div id="evtUpList"></div>
-  <h2>Past</h2>
-  <div id="evtPastList"></div>
+  <div id="evtListWrap">
+    <h2>Upcoming</h2>
+    <div id="evtUpList"></div>
+    <h2>Past</h2>
+    <div id="evtPastList"></div>
+  </div>
+  <div id="evtCalWrap" class="hidden">
+    <div class="calNav">
+      <button type="button" onclick="calShift(-1)" aria-label="Previous month">‹</button>
+      <div class="calTitle" id="calTitle">Month</div>
+      <button type="button" onclick="calShift(1)" aria-label="Next month">›</button>
+    </div>
+    <div class="calGrid" id="calGrid"></div>
+    <div class="calDayList">
+      <h2 id="calDayHead">Day</h2>
+      <div id="calDayList"></div>
+    </div>
+  </div>
 </div>
 
 
@@ -239,7 +291,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.22</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.23</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -262,6 +314,10 @@ const ARCH=ROOT+"/calendar-archive";
 const BOARD=ROOT+"/calendar-board.json";
 const JOBS=ROOT+"/calendar-jobs.json";
 let board=null, jobsData={updated:"",jobs:[]}, tab="inbox", remTimer=null, itemAlertTimers=[], eventRemTimer=null;
+const SCHED_VIEW_KEY="chi-scheduler:scheduleView";
+let scheduleView=(function(){try{return localStorage.getItem(SCHED_VIEW_KEY)==="calendar"?"calendar":"list";}catch(e){return"list";}})();
+let calCursor=new Date();
+let calSelected=null;
 
 /* ---------- storage ---------- */
 const LS=window.localStorage;
@@ -1064,6 +1120,202 @@ function renderJobs(){
       :"Jobs file · not found (empty)";
   }
 }
+function evtCard(ev, now){
+  if(now==null) now=Date.now();
+  normalizeEvent(ev);
+  const anyOn=ev.alerts.some(function(a){return a>0;});
+  const bellOn=anyOn?" on":"";
+  const summary=ev.alerts.filter(function(a){return a>0;}).map(function(a){return eventAlertWhenLabel(ev,a);}).join(" · ");
+  const occ=ev.status==="open"?nextOccurrence(ev, now):new Date(ev.when);
+  const whenShow=(occ&&!isNaN(occ.getTime()))?fmtWhen(occ.toISOString()):fmtWhen(ev.when);
+  const rep=ev.repeat==="daily"||ev.repeat==="weekly"?ev.repeat:"off";
+  const repeatRow='<div class="xrepeat priSlot" onclick="event.stopPropagation()"><div class="slbl">Repeat</div>'
+    +'<div class="alertpick on reppick">'
+    +'<button class="'+(rep==="off"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'off\')">Off</button>'
+    +'<button class="'+(rep==="daily"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'daily\')">Daily</button>'
+    +'<button class="'+(rep==="weekly"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'weekly\')">Weekly</button>'
+    +'</div></div>';
+  let slots="";
+  for(let slot=0;slot<3;slot++){
+    const am=ev.alerts[slot];
+    const customSel=!eventPresetMins(am)&&am>0;
+    const picks=[0,15,30,60,120,1440].map(function(m){
+      return '<button class="'+(am===m?"sel":"")+'" onclick="setEventAlertSlot(\''+ev.id+'\','+slot+','+m+')">'
+        +eventAlertLabel(m)+'</button>';
+    }).join("")
+      +'<button class="'+(customSel?"sel":"")+'" onclick="showEvtCust('+ev.n+','+slot+')">Custom</button>'
+      +(function(){
+        const parts=minsToUnitParts(customSel?am:0);
+        const cid='eac'+ev.n+'s'+slot;
+        return '<div class="cust" id="'+cid+'" data-unit="'+parts.unit+'" style="display:'+(customSel?"flex":"none")+'">'
+          +'<input type="number" id="eai'+ev.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="#"'
+          +' value="'+(customSel?parts.num:"")+'" onclick="event.stopPropagation()">'
+          +custUnitHtml(cid,parts.unit)
+          +'<button class="b-yellow" onclick="saveEvtCustom(\''+ev.id+'\','+ev.n+','+slot+')">Set</button>'
+          +'</div>';
+      })();
+    slots+='<div class="priSlot"><div class="slbl">Alert '+(slot+1)+' (before)</div>'
+      +'<div class="alertpick on">'+picks+'</div></div>';
+  }
+  slots+='<button onclick="testEventAlert(\''+ev.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
+  const whereLine=ev.where?('<div class="sub xwhere">📍 '+esc(ev.where)+'</div>'):"";
+  const doneBit=ev.status==="done"?' · done':"";
+  return '<div class="item" id="ec'+ev.n+'" onclick="tglEvt('+ev.n+')"><div class="prow">'
+    +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglEvtAlert('+ev.n+')">'
+    +(anyOn?"🔔":"🔕")+'</button>'
+    +'<div class="body"><div class="cat">'+esc(ev.id)
+    +(summary?(' · 🔔 '+summary):"")+doneBit+'</div>'
+    +'<div class="evHead"><div class="ttl">'+esc(ev.title)+'</div>'
+    +'<div class="when">'+esc(whenShow)+'</div></div>'
+    +whereLine+'</div>'
+    +'<div class="acts minirow" onclick="event.stopPropagation()">'
+    +(ev.status==="open"
+      ?('<button class="mini b-green" onclick="actEvent(\''+ev.id+'\',\'done\')">✅<br>Done</button>')
+      :"")
+    +'<button class="mini b-red" onclick="actEvent(\''+ev.id+'\',\'del\')">🗑<br>Delete</button>'
+    +'</div></div>'
+    +repeatRow
+    +'<div class="priSlots" id="eap'+ev.n+'" onclick="event.stopPropagation()">'+slots+'</div>'
+    +'</div>';
+}
+function setScheduleView(v){
+  scheduleView=(v==="calendar")?"calendar":"list";
+  try{localStorage.setItem(SCHED_VIEW_KEY, scheduleView);}catch(e){}
+  applyScheduleView();
+  if(board) renderEvents();
+  else if(scheduleView==="calendar") renderCalendar();
+}
+function applyScheduleView(){
+  const list=document.getElementById("evtListWrap");
+  const cal=document.getElementById("evtCalWrap");
+  const bl=document.getElementById("svList");
+  const bc=document.getElementById("svCal");
+  if(list) list.classList.toggle("hidden", scheduleView!=="list");
+  if(cal) cal.classList.toggle("hidden", scheduleView!=="calendar");
+  if(bl){bl.classList.toggle("on", scheduleView==="list"); bl.setAttribute("aria-pressed", scheduleView==="list"?"true":"false");}
+  if(bc){bc.classList.toggle("on", scheduleView==="calendar"); bc.setAttribute("aria-pressed", scheduleView==="calendar"?"true":"false");}
+}
+function calShift(dir){
+  calCursor=new Date(calCursor.getFullYear(), calCursor.getMonth()+dir, 1);
+  renderCalendar();
+}
+function dayKey(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function selectCalDay(y,m,d){
+  calSelected=new Date(y,m,d);
+  calCursor=new Date(y,m,1);
+  renderCalendar();
+}
+function openCalEvent(n){
+  const el=document.getElementById("ec"+n);
+  if(!el) return;
+  if(!el.classList.contains("open")) el.classList.add("open");
+  try{el.scrollIntoView({behavior:"smooth",block:"nearest"});}catch(e){el.scrollIntoView();}
+}
+function eventsByDayInMonth(year, month){
+  const map={};
+  function add(d, ev, whenIso){
+    if(d.getFullYear()!==year || d.getMonth()!==month) return;
+    const k=dayKey(d);
+    if(!map[k]) map[k]=[];
+    map[k].push({ev:ev, whenIso:whenIso});
+  }
+  const monthStart=new Date(year, month, 1);
+  const monthEnd=new Date(year, month+1, 0, 23, 59, 59, 999);
+  const events=(board&&board.events)||[];
+  for(let i=0;i<events.length;i++){
+    const ev=events[i];
+    normalizeEvent(ev);
+    if(ev.status!=="open" && ev.status!=="done") continue;
+    const start=new Date(ev.when);
+    if(isNaN(start.getTime())) continue;
+    const rep=ev.repeat==="daily"||ev.repeat==="weekly"?ev.repeat:"off";
+    if(rep==="off"){
+      add(start, ev, start.toISOString());
+      continue;
+    }
+    const step=rep==="weekly"?7:1;
+    let d=new Date(start.getFullYear(), start.getMonth(), start.getDate(),
+      start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+    let guard=0;
+    while(d.getTime()<monthStart.getTime() && guard++<20000) d.setDate(d.getDate()+step);
+    guard=0;
+    while(d.getTime()<=monthEnd.getTime() && guard++<100){
+      add(new Date(d.getTime()), ev, d.toISOString());
+      d.setDate(d.getDate()+step);
+    }
+  }
+  for(const k in map){
+    map[k].sort(function(a,b){return new Date(a.whenIso)-new Date(b.whenIso);});
+  }
+  return map;
+}
+function renderCalendar(){
+  const grid=document.getElementById("calGrid");
+  const title=document.getElementById("calTitle");
+  const dayHead=document.getElementById("calDayHead");
+  const dayList=document.getElementById("calDayList");
+  if(!grid||!title||!dayHead||!dayList) return;
+  if(!calSelected) calSelected=new Date();
+  const y=calCursor.getFullYear();
+  const m=calCursor.getMonth();
+  title.textContent=new Date(y,m,1).toLocaleString(undefined,{month:"long",year:"numeric"});
+  const byDay=eventsByDayInMonth(y,m);
+  const first=new Date(y,m,1);
+  const startPad=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const todayK=dayKey(new Date());
+  const selK=dayKey(calSelected);
+  const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  let html=dows.map(function(d){return '<div class="calDow">'+d+'</div>';}).join("");
+  const cells=[];
+  for(let i=0;i<startPad;i++){
+    const day=prevDays-startPad+i+1;
+    const pm=m===0?11:m-1;
+    const py=m===0?y-1:y;
+    cells.push({y:py,m:pm,d:day,out:true});
+  }
+  for(let d=1;d<=daysInMonth;d++) cells.push({y:y,m:m,d:d,out:false});
+  while(cells.length<42){
+    const i=cells.length-(startPad+daysInMonth);
+    const nm=m===11?0:m+1;
+    const ny=m===11?y+1:y;
+    cells.push({y:ny,m:nm,d:i+1,out:true});
+  }
+  html+=cells.map(function(c){
+    const k=c.y+"-"+String(c.m+1).padStart(2,"0")+"-"+String(c.d).padStart(2,"0");
+    const evs=byDay[k]||[];
+    const cls=["calCell"];
+    if(c.out) cls.push("out");
+    if(k===todayK) cls.push("today");
+    if(k===selK) cls.push("sel");
+    let body='<div class="dnum">'+c.d+'</div>';
+    if(evs.length){
+      const show=evs.slice(0,2);
+      body+=show.map(function(x){
+        return '<div class="calEv" title="'+esc(x.ev.title||"").replace(/"/g,"&quot;")+'" onclick="event.stopPropagation();selectCalDay('+c.y+','+c.m+','+c.d+');setTimeout(function(){openCalEvent('+x.ev.n+');},0)">'+esc(x.ev.title||"(event)")+'</div>';
+      }).join("");
+      if(evs.length>2){
+        body+='<div class="calDots">'+evs.slice(2,Math.min(evs.length,5)).map(function(){return '<span class="calDot"></span>';}).join("")+'</div>';
+      }
+    }
+    return '<div class="'+cls.join(" ")+'" onclick="selectCalDay('+c.y+','+c.m+','+c.d+')">'+body+'</div>';
+  }).join("");
+  grid.innerHTML=html;
+  const selEvs=byDay[selK]||[];
+  const seen={}, uniq=[];
+  for(let i=0;i<selEvs.length;i++){
+    const ev=selEvs[i].ev;
+    if(seen[ev.id]) continue;
+    seen[ev.id]=1;
+    uniq.push(ev);
+  }
+  dayHead.textContent=calSelected.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"});
+  const now=Date.now();
+  dayList.innerHTML=uniq.length?uniq.map(function(ev){return evtCard(ev, now);}).join(""):'<p class="note">No events this day.</p>';
+}
 function renderEvents(){
   const upEl=document.getElementById("evtUpList");
   const pastEl=document.getElementById("evtPastList");
@@ -1087,65 +1339,17 @@ function renderEvents(){
   }).sort(function(a,b){return new Date(b.when)-new Date(a.when);})
     .concat((board.events||[]).filter(function(e){return e.status==="done";})
       .sort(function(a,b){return new Date(b.when)-new Date(a.when);}));
-  function evtCard(ev){
-    normalizeEvent(ev);
-    const anyOn=ev.alerts.some(function(a){return a>0;});
-    const bellOn=anyOn?" on":"";
-    const summary=ev.alerts.filter(function(a){return a>0;}).map(function(a){return eventAlertWhenLabel(ev,a);}).join(" · ");
-    const occ=ev.status==="open"?nextOccurrence(ev, now):new Date(ev.when);
-    const whenShow=(occ&&!isNaN(occ.getTime()))?fmtWhen(occ.toISOString()):fmtWhen(ev.when);
-    const rep=ev.repeat==="daily"||ev.repeat==="weekly"?ev.repeat:"off";
-    const repeatRow='<div class="xrepeat priSlot" onclick="event.stopPropagation()"><div class="slbl">Repeat</div>'
-      +'<div class="alertpick on reppick">'
-      +'<button class="'+(rep==="off"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'off\')">Off</button>'
-      +'<button class="'+(rep==="daily"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'daily\')">Daily</button>'
-      +'<button class="'+(rep==="weekly"?"sel":"")+'" onclick="setEventRepeat(\''+ev.id+'\',\'weekly\')">Weekly</button>'
-      +'</div></div>';
-    let slots="";
-    for(let slot=0;slot<3;slot++){
-      const am=ev.alerts[slot];
-      const customSel=!eventPresetMins(am)&&am>0;
-      const picks=[0,15,30,60,120,1440].map(function(m){
-        return '<button class="'+(am===m?"sel":"")+'" onclick="setEventAlertSlot(\''+ev.id+'\','+slot+','+m+')">'
-          +eventAlertLabel(m)+'</button>';
-      }).join("")
-        +'<button class="'+(customSel?"sel":"")+'" onclick="showEvtCust('+ev.n+','+slot+')">Custom</button>'
-        +(function(){
-          const parts=minsToUnitParts(customSel?am:0);
-          const cid='eac'+ev.n+'s'+slot;
-          return '<div class="cust" id="'+cid+'" data-unit="'+parts.unit+'" style="display:'+(customSel?"flex":"none")+'">'
-            +'<input type="number" id="eai'+ev.n+'s'+slot+'" min="1" step="1" inputmode="numeric" placeholder="#"'
-            +' value="'+(customSel?parts.num:"")+'" onclick="event.stopPropagation()">'
-            +custUnitHtml(cid,parts.unit)
-            +'<button class="b-yellow" onclick="saveEvtCustom(\''+ev.id+'\','+ev.n+','+slot+')">Set</button>'
-            +'</div>';
-        })();
-      slots+='<div class="priSlot"><div class="slbl">Alert '+(slot+1)+' (before)</div>'
-        +'<div class="alertpick on">'+picks+'</div></div>';
-    }
-    slots+='<button onclick="testEventAlert(\''+ev.id+'\')" style="margin-top:8px;min-height:2.6em;font-size:16px;font-weight:800;border-radius:12px;padding:8px 12px;background:#000;color:#fff;border:2px solid var(--line);">🔔 Test</button>';
-    const whereLine=ev.where?('<div class="sub xwhere">📍 '+esc(ev.where)+'</div>'):"";
-    const doneBit=ev.status==="done"?' · done':"";
-    return '<div class="item" id="ec'+ev.n+'" onclick="tglEvt('+ev.n+')"><div class="prow">'
-      +'<button class="bell'+bellOn+'" title="Alert" onclick="event.stopPropagation();tglEvtAlert('+ev.n+')">'
-      +(anyOn?"🔔":"🔕")+'</button>'
-      +'<div class="body"><div class="cat">'+esc(ev.id)
-      +(summary?(' · 🔔 '+summary):"")+doneBit+'</div>'
-      +'<div class="ttl">'+esc(ev.title)+'</div>'
-      +'<div class="sub">🗓️ '+esc(whenShow)+'</div>'
-      +whereLine+'</div>'
-      +'<div class="acts minirow" onclick="event.stopPropagation()">'
-      +(ev.status==="open"
-        ?('<button class="mini b-green" onclick="actEvent(\''+ev.id+'\',\'done\')">✅<br>Done</button>')
-        :"")
-      +'<button class="mini b-red" onclick="actEvent(\''+ev.id+'\',\'del\')">🗑<br>Delete</button>'
-      +'</div></div>'
-      +repeatRow
-      +'<div class="priSlots" id="eap'+ev.n+'" onclick="event.stopPropagation()">'+slots+'</div>'
-      +'</div>';
+  applyScheduleView();
+  if(scheduleView==="calendar"){
+    upEl.innerHTML="";
+    pastEl.innerHTML="";
+    renderCalendar();
+    return;
   }
-  upEl.innerHTML=upcoming.length?upcoming.map(evtCard).join(""):'<p class="empty">No upcoming events 🗓️</p>';
-  pastEl.innerHTML=past.length?past.map(evtCard).join(""):'<p class="note">Empty.</p>';
+  const dayList=document.getElementById("calDayList");
+  if(dayList) dayList.innerHTML="";
+  upEl.innerHTML=upcoming.length?upcoming.map(function(ev){return evtCard(ev, now);}).join(""):'<p class="empty">No upcoming events 🗓️</p>';
+  pastEl.innerHTML=past.length?past.map(function(ev){return evtCard(ev, now);}).join(""):'<p class="note">Empty.</p>';
 }
 
 /* ---------- nav / boot ---------- */
@@ -1154,7 +1358,14 @@ function go(t){tab=t;
     document.getElementById("s-"+s).classList.toggle("on",s===t);
     document.getElementById("n-"+s).classList.toggle("cur",s===t);}
   document.getElementById("hdr").textContent=
-    {inbox:"Inbox",pri:"Priorities",evt:"Schedule",jobs:"Jobs",done:"Completed",set:"Settings"}[t];}
+    {inbox:"Inbox",pri:"Priorities",evt:"Schedule",jobs:"Jobs",done:"Completed",set:"Settings"}[t];
+  const tog=document.getElementById("schedViewToggle");
+  if(tog) tog.style.display=(t==="evt")?"":"none";
+  if(t==="evt"){
+    applyScheduleView();
+    if(scheduleView==="calendar") renderCalendar();
+  }
+}
 function msg(m){document.getElementById("setupMsg").textContent=m;}
 function stamp(m){document.getElementById("scanStamp").textContent=m;}
 document.getElementById("rescan").onclick=()=>scan().catch(e=>stamp("Scan failed: "+e.message));
