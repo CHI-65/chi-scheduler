@@ -291,7 +291,7 @@ h2{font-size:26px; color:var(--yellow); margin:18px 0 6px;}
   <button class="big b-gray" id="notifBtn" onclick="enableNotifs()">🔔 Allow phone notifications</button>
   <p class="note" id="notifMsg">Home-screen app only. Full push needs a later server step; texts are the reliable closed-app path today.</p>
   <button class="big b-gray" onclick="signOut()">Sign out of Dropbox</button>
-  <p class="stamp" id="verStamp">📅 Scheduler v1.23</p>
+  <p class="stamp" id="verStamp">📅 Scheduler v1.24</p>
 </div>
 
 <p class="stamp" id="scanStamp"></p>
@@ -313,7 +313,7 @@ const DONE=ROOT+"/calendar-inbox-done";
 const ARCH=ROOT+"/calendar-archive";
 const BOARD=ROOT+"/calendar-board.json";
 const JOBS=ROOT+"/calendar-jobs.json";
-let board=null, jobsData={updated:"",jobs:[]}, tab="inbox", remTimer=null, itemAlertTimers=[], eventRemTimer=null;
+let board=null, jobsData={updated:"",jobs:[]}, tab="evt", remTimer=null, itemAlertTimers=[], eventRemTimer=null;
 const SCHED_VIEW_KEY="chi-scheduler:scheduleView";
 let scheduleView=(function(){try{return localStorage.getItem(SCHED_VIEW_KEY)==="calendar"?"calendar":"list";}catch(e){return"list";}})();
 let calCursor=new Date();
@@ -1382,7 +1382,7 @@ if("serviceWorker" in navigator){
   if(code)await finishAuth(code);
   if(!tokens()){document.getElementById("s-setup").classList.add("on");
     document.querySelector("nav").style.display="none"; return;}
-  go("inbox");
+  go("evt");
   try{await scan();}catch(e){stamp("Scan failed: "+e.message);}
 })();
 </script>
